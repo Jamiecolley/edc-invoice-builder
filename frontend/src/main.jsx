@@ -117,6 +117,7 @@ function AdminPanel() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
+  const [adminTab, setAdminTab] = useState('organisations');
 
   const [editingOrgUid, setEditingOrgUid] = useState(null);
   const [originalOrg, setOriginalOrg] = useState(null);
@@ -298,203 +299,221 @@ function AdminPanel() {
   return <section className="card">
     <h2>Admin Settings</h2>
 
+    <div className="tabs">
+      <button
+        className={adminTab === 'organisations' ? 'selected' : ''}
+        onClick={() => setAdminTab('organisations')}
+      >
+        Organisations
+      </button>
+
+      <button
+        className={adminTab === 'rates' ? 'selected' : ''}
+        onClick={() => setAdminTab('rates')}
+      >
+        Charge Rates
+      </button>
+    </div>
+
     {error && <p className="error">{error}</p>}
     {message && <p className="success">{message}</p>}
 
-    <h3>Organisations</h3>
+    {adminTab === 'organisations' && <>
+      <h3>Organisations</h3>
 
-    <div className="row">
-      <label>
-        Search
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search org code, name, or country"
-        />
-      </label>
-    </div>
+<div className="admin-search-row">
+  <label>Search</label>
+  <input
+    value={search}
+    onChange={e => setSearch(e.target.value)}
+    placeholder="Search org code, name, or country"
+  />
+</div>
 
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>OrgCode</th>
-            <th>Name</th>
-            <th>Country</th>
-            <th>Get Shipment Data</th>
-            <th>Excluded</th>
-            <th>Charge Plan</th>
-            <th>Action</th>
-          </tr>
-        </thead>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>OrgCode</th>
+              <th>Name</th>
+              <th>Country</th>
+              <th>Get Shipment Data</th>
+              <th>Excluded</th>
+              <th>Charge Plan</th>
+              <th>Action</th>
+            </tr>
+          </thead>
 
-        <tbody>
-          {filteredOrgs.map(o => {
-            const isEditing = editingOrgUid === o.uid;
-            const anotherRowIsEditing = editingOrgUid !== null && editingOrgUid !== o.uid;
+          <tbody>
+            {filteredOrgs.map(o => {
+              const isEditing = editingOrgUid === o.uid;
+              const anotherRowIsEditing = editingOrgUid !== null && editingOrgUid !== o.uid;
 
-            return <tr key={o.uid}>
-              <td>{o.org_code}</td>
-              <td>{o.org_full_name}</td>
+              return <tr key={o.uid}>
+                <td>{o.org_code}</td>
+                <td>{o.org_full_name}</td>
 
-              <td>
-                <input
-                  value={o.country_code || ''}
-                  disabled={!isEditing}
-                  onChange={e => updateOrgLocal(o.uid, 'country_code', e.target.value)}
-                  placeholder="GB / DE / Multi"
-                />
-              </td>
+                <td>
+                  <input
+                    value={o.country_code || ''}
+                    disabled={!isEditing}
+                    onChange={e => updateOrgLocal(o.uid, 'country_code', e.target.value)}
+                    placeholder="GB / DE / Multi"
+                  />
+                </td>
 
-              <td>
-                <input
-                  type="checkbox"
-                  checked={Boolean(o.get_shipment_data)}
-                  disabled={!isEditing}
-                  onChange={e => updateOrgLocal(o.uid, 'get_shipment_data', e.target.checked)}
-                />
-              </td>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(o.get_shipment_data)}
+                    disabled={!isEditing}
+                    onChange={e => updateOrgLocal(o.uid, 'get_shipment_data', e.target.checked)}
+                  />
+                </td>
 
-              <td>
-                <input
-                  type="checkbox"
-                  checked={Boolean(o.excluded)}
-                  disabled={!isEditing}
-                  onChange={e => updateOrgLocal(o.uid, 'excluded', e.target.checked)}
-                />
-              </td>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(o.excluded)}
+                    disabled={!isEditing}
+                    onChange={e => updateOrgLocal(o.uid, 'excluded', e.target.checked)}
+                  />
+                </td>
 
-              <td>
-                <input
-                  value={o.charge_plan_code || ''}
-                  disabled={!isEditing}
-                  onChange={e => updateOrgLocal(o.uid, 'charge_plan_code', e.target.value)}
-                  placeholder="DEFAULT_2026"
-                />
-              </td>
+                <td>
+                  <input
+                    value={o.charge_plan_code || ''}
+                    disabled={!isEditing}
+                    onChange={e => updateOrgLocal(o.uid, 'charge_plan_code', e.target.value)}
+                    placeholder="DEFAULT_2026"
+                  />
+                </td>
 
-              <td>
-                {!isEditing && (
-                  <button disabled={anotherRowIsEditing} onClick={() => startEditOrg(o)}>
-                    Edit
-                  </button>
-                )}
-
-                {isEditing && (
-                  <div className="row">
-                    <button className="primary" onClick={() => saveOrg(o)}>Save</button>
-                    <button onClick={cancelEditOrg}>Cancel</button>
-                  </div>
-                )}
-              </td>
-            </tr>;
-          })}
-        </tbody>
-      </table>
-    </div>
-
-    <h3>Charge Rates</h3>
-
-    <button onClick={addRate}>Add Rate</button>
-
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Charge Plan</th>
-            <th>Metric</th>
-            <th>From Qty</th>
-            <th>To Qty</th>
-            <th>Unit Price</th>
-            <th>Active</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {rates.map(r => {
-            const isEditing = editingRateUid === r.uid;
-            const anotherRateIsEditing = editingRateUid !== null && editingRateUid !== r.uid;
-
-            return <tr key={r.uid}>
-              <td>
-                <input
-                  value={r.charge_plan_code || ''}
-                  disabled={!isEditing}
-                  onChange={e => updateRateLocal(r.uid, 'charge_plan_code', e.target.value)}
-                />
-              </td>
-
-              <td>
-                <input
-                  value={r.metric_code || ''}
-                  disabled={!isEditing}
-                  onChange={e => updateRateLocal(r.uid, 'metric_code', e.target.value)}
-                />
-              </td>
-
-              <td>
-                <input
-                  type="number"
-                  value={r.from_quantity ?? ''}
-                  disabled={!isEditing}
-                  onChange={e => updateRateLocal(r.uid, 'from_quantity', e.target.value)}
-                />
-              </td>
-
-              <td>
-                <input
-                  type="number"
-                  value={r.to_quantity ?? ''}
-                  disabled={!isEditing}
-                  onChange={e => updateRateLocal(r.uid, 'to_quantity', e.target.value)}
-                  placeholder="No limit"
-                />
-              </td>
-
-              <td>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={r.unit_price ?? ''}
-                  disabled={!isEditing}
-                  onChange={e => updateRateLocal(r.uid, 'unit_price', e.target.value)}
-                />
-              </td>
-
-              <td>
-                <input
-                  type="checkbox"
-                  checked={Boolean(r.is_active)}
-                  disabled={!isEditing}
-                  onChange={e => updateRateLocal(r.uid, 'is_active', e.target.checked)}
-                />
-              </td>
-
-              <td>
-                {!isEditing && (
-                  <div className="row">
-                    <button disabled={anotherRateIsEditing} onClick={() => startEditRate(r)}>
+                <td>
+                  {!isEditing && (
+                    <button disabled={anotherRowIsEditing} onClick={() => startEditOrg(o)}>
                       Edit
                     </button>
-                    <button disabled={anotherRateIsEditing} onClick={() => deleteRate(r)}>
-                      Delete
-                    </button>
-                  </div>
-                )}
+                  )}
 
-                {isEditing && (
-                  <div className="row">
-                    <button className="primary" onClick={() => saveRate(r)}>Save</button>
-                    <button onClick={cancelEditRate}>Cancel</button>
-                  </div>
-                )}
-              </td>
-            </tr>;
-          })}
-        </tbody>
-      </table>
-    </div>
+                  {isEditing && (
+                    <div className="row">
+                      <button className="primary" onClick={() => saveOrg(o)}>Save</button>
+                      <button onClick={cancelEditOrg}>Cancel</button>
+                    </div>
+                  )}
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>}
+
+    {adminTab === 'rates' && <>
+      <h3>Charge Rates</h3>
+
+      <button onClick={addRate}>Add Rate</button>
+      
+<div className="table-wrap charge-rates-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Charge Plan</th>
+              <th>Metric</th>
+              <th>From Qty</th>
+              <th>To Qty</th>
+              <th>Unit Price</th>
+              <th>Active</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {rates.map(r => {
+              const isEditing = editingRateUid === r.uid;
+              const anotherRateIsEditing = editingRateUid !== null && editingRateUid !== r.uid;
+
+              return <tr key={r.uid}>
+                <td>
+                  <input
+                    value={r.charge_plan_code || ''}
+                    disabled={!isEditing}
+                    onChange={e => updateRateLocal(r.uid, 'charge_plan_code', e.target.value)}
+                  />
+                </td>
+
+                <td>
+                  <input
+                    value={r.metric_code || ''}
+                    disabled={!isEditing}
+                    onChange={e => updateRateLocal(r.uid, 'metric_code', e.target.value)}
+                  />
+                </td>
+
+                <td>
+                  <input
+                    type="number"
+                    value={r.from_quantity ?? ''}
+                    disabled={!isEditing}
+                    onChange={e => updateRateLocal(r.uid, 'from_quantity', e.target.value)}
+                  />
+                </td>
+
+                <td>
+                  <input
+                    type="number"
+                    value={r.to_quantity ?? ''}
+                    disabled={!isEditing}
+                    onChange={e => updateRateLocal(r.uid, 'to_quantity', e.target.value)}
+                    placeholder="No limit"
+                  />
+                </td>
+
+                <td>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={r.unit_price ?? ''}
+                    disabled={!isEditing}
+                    onChange={e => updateRateLocal(r.uid, 'unit_price', e.target.value)}
+                  />
+                </td>
+
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(r.is_active)}
+                    disabled={!isEditing}
+                    onChange={e => updateRateLocal(r.uid, 'is_active', e.target.checked)}
+                  />
+                </td>
+
+                <td>
+                  {!isEditing && (
+                    <div className="row">
+                      <button disabled={anotherRateIsEditing} onClick={() => startEditRate(r)}>
+                        Edit
+                      </button>
+                      <button disabled={anotherRateIsEditing} onClick={() => deleteRate(r)}>
+                        Delete
+                      </button>
+                    </div>
+                  )}
+
+                  {isEditing && (
+                    <div className="row">
+                      <button className="primary" onClick={() => saveRate(r)}>Save</button>
+                      <button onClick={cancelEditRate}>Cancel</button>
+                    </div>
+                  )}
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>}
   </section>;
 }
 

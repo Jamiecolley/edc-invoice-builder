@@ -18,3 +18,110 @@ th { background: #f7f2eb; position: sticky; top: 0; }
 .error { color: #991b1b; background: #fee2e2; padding: 10px; border-radius: 8px; }
 .success { color: #14532d; background: #dcfce7; padding: 10px; border-radius: 8px; }
 .muted { color: #6b7280; }
+.admin-search-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 12px 0 18px 0;
+}
+
+.admin-search-row input {
+  width: 420px;
+  max-width: 100%;
+}
+
+.table-wrap table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.table-wrap th,
+.table-wrap td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.table-wrap input[type="text"],
+.table-wrap input:not([type]) {
+  max-width: 100%;
+}
+
+.table-wrap input {
+  box-sizing: border-box;
+}
+
+.table-wrap th:nth-child(1),
+.table-wrap td:nth-child(1) {
+  width: 130px;
+}
+
+.table-wrap th:nth-child(2),
+.table-wrap td:nth-child(2) {
+  width: 300px;
+}
+
+.table-wrap th:nth-child(3),
+.table-wrap td:nth-child(3) {
+  width: 170px;
+}
+
+.table-wrap th:nth-child(4),
+.table-wrap td:nth-child(4),
+.table-wrap th:nth-child(5),
+.table-wrap td:nth-child(5) {
+  width: 120px;
+  text-align: center;
+}
+
+.table-wrap th:nth-child(6),
+.table-wrap td:nth-child(6) {
+  width: 170px;
+}
+
+.table-wrap th:nth-child(7),
+.table-wrap td:nth-child(7) {
+  width: 130px;
+}
+.charge-rates-table table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.charge-rates-table th:nth-child(1),
+.charge-rates-table td:nth-child(1) {
+  width: 170px;
+}
+
+.charge-rates-table th:nth-child(2),
+.charge-rates-table td:nth-child(2) {
+  width: 120px;
+}
+
+.charge-rates-table th:nth-child(3),
+.charge-rates-table td:nth-child(3),
+.charge-rates-table th:nth-child(4),
+.charge-rates-table td:nth-child(4) {
+  width: 100px;
+}
+
+.charge-rates-table th:nth-child(5),
+.charge-rates-table td:nth-child(5) {
+  width: 110px;
+}
+
+.charge-rates-table th:nth-child(6),
+.charge-rates-table td:nth-child(6) {
+  width: 70px;
+  text-align: center;
+}
+
+.charge-rates-table th:nth-child(7),
+.charge-rates-table td:nth-child(7) {
+  width: 160px;
+}
+
+.charge-rates-table input {
+  width: 100%;
+  max-width: 100%;
+}
