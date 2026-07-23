@@ -90,12 +90,37 @@ def rates(db: Session = Depends(get_db), current_user: User = Depends(get_curren
 
 @router.post("/charge-plan-rates")
 def create_rate(payload: ChargeRatePayload, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
-    rec = ChargePlanRate(**payload.model_dump()); db.add(rec); db.commit(); return {"uid": rec.uid}
+    rec = ChargePlanRate(**payload.model_dump())
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+    return {"uid": rec.uid}
+
+
+@router.put("/charge-plan-rates/{uid}")
+def update_rate(uid: int, payload: ChargeRatePayload, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    rec = db.query(ChargePlanRate).filter(ChargePlanRate.uid == uid).first()
+
+    if not rec:
+        raise HTTPException(404, "Charge rate not found")
+
+    for key, value in payload.model_dump().items():
+        setattr(rec, key, value)
+
+    db.commit()
+    return {"status": "updated"}
 
 
 @router.delete("/charge-plan-rates/{uid}")
 def delete_rate(uid: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
-    db.query(ChargePlanRate).filter(ChargePlanRate.uid == uid).delete(); db.commit(); return {"status": "deleted"}
+    rec = db.query(ChargePlanRate).filter(ChargePlanRate.uid == uid).first()
+
+    if not rec:
+        raise HTTPException(404, "Charge rate not found")
+
+    db.delete(rec)
+    db.commit()
+    return {"status": "deleted"}
 
 
 class CountryRulePayload(BaseModel):
