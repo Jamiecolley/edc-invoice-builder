@@ -117,8 +117,12 @@ function AdminPanel() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
-  const [editingUid, setEditingUid] = useState(null);
+
+  const [editingOrgUid, setEditingOrgUid] = useState(null);
   const [originalOrg, setOriginalOrg] = useState(null);
+
+  const [editingRateUid, setEditingRateUid] = useState(null);
+  const [originalRate, setOriginalRate] = useState(null);
 
   async function load() {
     setOrgs(await apiFetch('/admin/organisations'));
@@ -129,22 +133,20 @@ function AdminPanel() {
     load().catch(e => setError(e.message));
   }, []);
 
-  function startEdit(org) {
-    setEditingUid(org.uid);
+  function startEditOrg(org) {
+    setEditingOrgUid(org.uid);
     setOriginalOrg({ ...org });
     setMessage('');
     setError('');
   }
 
-  function cancelEdit() {
+  function cancelEditOrg() {
     if (originalOrg) {
       setOrgs(orgs.map(o => o.uid === originalOrg.uid ? originalOrg : o));
     }
 
-    setEditingUid(null);
+    setEditingOrgUid(null);
     setOriginalOrg(null);
-    setMessage('');
-    setError('');
   }
 
   function updateOrgLocal(uid, field, value) {
@@ -161,8 +163,8 @@ function AdminPanel() {
         body: JSON.stringify(org)
       });
 
-      setMessage(`Saved ${org.org_code}`);
-      setEditingUid(null);
+      setMessage(`Saved organisation ${org.org_code}`);
+      setEditingOrgUid(null);
       setOriginalOrg(null);
       await load();
     } catch (e) {
@@ -170,23 +172,122 @@ function AdminPanel() {
     }
   }
 
-  async function addRate() {
-    const from = Number(prompt('From quantity?'));
-    const toText = prompt('To quantity? Leave blank for no limit');
-    const unit = Number(prompt('Unit price?'));
+  function startEditRate(rate) {
+    setEditingRateUid(rate.uid);
+    setOriginalRate({ ...rate });
+    setMessage('');
+    setError('');
+  }
 
-    await apiFetch('/admin/charge-plan-rates', {
-      method: 'POST',
-      body: JSON.stringify({
-        charge_plan_code: 'DEFAULT_2026',
-        metric_code: 'SHIPMENT',
-        from_quantity: from,
-        to_quantity: toText ? Number(toText) : null,
-        unit_price: unit
-      })
-    });
+  function cancelEditRate() {
+    if (originalRate && originalRate.isNew) {
+      setRates(rates.filter(r => r.uid !== originalRate.uid));
+    } else if (originalRate) {
+      setRates(rates.map(r => r.uid === originalRate.uid ? originalRate : r));
+    }
 
-    await load();
+    setEditingRateUid(null);
+    setOriginalRate(null);
+  }
+
+  function updateRateLocal(uid, field, value) {
+    setRates(rates.map(r => r.uid === uid ? { ...r, [field]: value } : r));
+  }
+
+  function addRate() {
+    if (editingRateUid !== null) {
+      setError('Please save or cancel the current rate before adding another one.');
+      return;
+    }
+
+    const tempUid = `new-${Date.now()}`;
+
+    const newRate = {
+      uid: tempUid,
+      charge_plan_code: 'DEFAULT_2026',
+      metric_code: 'SHIPMENT',
+      from_quantity: '',
+      to_quantity: '',
+      unit_price: '',
+      is_active: true,
+      isNew: true
+    };
+
+    setRates([...rates, newRate]);
+    setEditingRateUid(tempUid);
+    setOriginalRate({ ...newRate });
+    setMessage('');
+    setError('');
+  }
+
+  async function saveRate(rate) {
+    setError('');
+    setMessage('');
+
+    if (!rate.charge_plan_code || !rate.metric_code || rate.from_quantity === '' || rate.unit_price === '') {
+      setError('Charge Plan, Metric, From Qty and Unit Price are required.');
+      return;
+    }
+
+    const payload = {
+      charge_plan_code: rate.charge_plan_code,
+      metric_code: rate.metric_code,
+      from_quantity: Number(rate.from_quantity),
+      to_quantity: rate.to_quantity === '' || rate.to_quantity === null ? null : Number(rate.to_quantity),
+      unit_price: Number(rate.unit_price),
+      is_active: Boolean(rate.is_active)
+    };
+
+    try {
+      if (rate.isNew) {
+        await apiFetch('/admin/charge-plan-rates', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        setMessage(`Added rate ${rate.charge_plan_code}`);
+      } else {
+        await apiFetch(`/admin/charge-plan-rates/${rate.uid}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+
+        setMessage(`Saved rate ${rate.charge_plan_code}`);
+      }
+
+      setEditingRateUid(null);
+      setOriginalRate(null);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function deleteRate(rate) {
+    if (rate.isNew) {
+      setRates(rates.filter(r => r.uid !== rate.uid));
+      setEditingRateUid(null);
+      setOriginalRate(null);
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete rate ${rate.charge_plan_code} from ${rate.from_quantity}?`);
+
+    if (!confirmed) return;
+
+    setError('');
+    setMessage('');
+
+    try {
+      await apiFetch(`/admin/charge-plan-rates/${rate.uid}`, {
+        method: 'DELETE'
+      });
+
+      setMessage(`Deleted rate ${rate.charge_plan_code}`);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
   }
 
   const filteredOrgs = orgs.filter(o => {
@@ -229,8 +330,8 @@ function AdminPanel() {
 
         <tbody>
           {filteredOrgs.map(o => {
-            const isEditing = editingUid === o.uid;
-            const anotherRowIsEditing = editingUid !== null && editingUid !== o.uid;
+            const isEditing = editingOrgUid === o.uid;
+            const anotherRowIsEditing = editingOrgUid !== null && editingOrgUid !== o.uid;
 
             return <tr key={o.uid}>
               <td>{o.org_code}</td>
@@ -274,7 +375,7 @@ function AdminPanel() {
 
               <td>
                 {!isEditing && (
-                  <button disabled={anotherRowIsEditing} onClick={() => startEdit(o)}>
+                  <button disabled={anotherRowIsEditing} onClick={() => startEditOrg(o)}>
                     Edit
                   </button>
                 )}
@@ -282,7 +383,7 @@ function AdminPanel() {
                 {isEditing && (
                   <div className="row">
                     <button className="primary" onClick={() => saveOrg(o)}>Save</button>
-                    <button onClick={cancelEdit}>Cancel</button>
+                    <button onClick={cancelEditOrg}>Cancel</button>
                   </div>
                 )}
               </td>
@@ -293,8 +394,107 @@ function AdminPanel() {
     </div>
 
     <h3>Charge Rates</h3>
+
     <button onClick={addRate}>Add Rate</button>
-    <Table rows={rates} />
+
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Charge Plan</th>
+            <th>Metric</th>
+            <th>From Qty</th>
+            <th>To Qty</th>
+            <th>Unit Price</th>
+            <th>Active</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {rates.map(r => {
+            const isEditing = editingRateUid === r.uid;
+            const anotherRateIsEditing = editingRateUid !== null && editingRateUid !== r.uid;
+
+            return <tr key={r.uid}>
+              <td>
+                <input
+                  value={r.charge_plan_code || ''}
+                  disabled={!isEditing}
+                  onChange={e => updateRateLocal(r.uid, 'charge_plan_code', e.target.value)}
+                />
+              </td>
+
+              <td>
+                <input
+                  value={r.metric_code || ''}
+                  disabled={!isEditing}
+                  onChange={e => updateRateLocal(r.uid, 'metric_code', e.target.value)}
+                />
+              </td>
+
+              <td>
+                <input
+                  type="number"
+                  value={r.from_quantity ?? ''}
+                  disabled={!isEditing}
+                  onChange={e => updateRateLocal(r.uid, 'from_quantity', e.target.value)}
+                />
+              </td>
+
+              <td>
+                <input
+                  type="number"
+                  value={r.to_quantity ?? ''}
+                  disabled={!isEditing}
+                  onChange={e => updateRateLocal(r.uid, 'to_quantity', e.target.value)}
+                  placeholder="No limit"
+                />
+              </td>
+
+              <td>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={r.unit_price ?? ''}
+                  disabled={!isEditing}
+                  onChange={e => updateRateLocal(r.uid, 'unit_price', e.target.value)}
+                />
+              </td>
+
+              <td>
+                <input
+                  type="checkbox"
+                  checked={Boolean(r.is_active)}
+                  disabled={!isEditing}
+                  onChange={e => updateRateLocal(r.uid, 'is_active', e.target.checked)}
+                />
+              </td>
+
+              <td>
+                {!isEditing && (
+                  <div className="row">
+                    <button disabled={anotherRateIsEditing} onClick={() => startEditRate(r)}>
+                      Edit
+                    </button>
+                    <button disabled={anotherRateIsEditing} onClick={() => deleteRate(r)}>
+                      Delete
+                    </button>
+                  </div>
+                )}
+
+                {isEditing && (
+                  <div className="row">
+                    <button className="primary" onClick={() => saveRate(r)}>Save</button>
+                    <button onClick={cancelEditRate}>Cancel</button>
+                  </div>
+                )}
+              </td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>
   </section>;
 }
 
