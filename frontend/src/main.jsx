@@ -115,22 +115,186 @@ function AdminPanel() {
   const [orgs, setOrgs] = useState([]);
   const [rates, setRates] = useState([]);
   const [error, setError] = useState('');
-  async function load() { setOrgs(await apiFetch('/admin/organisations')); setRates(await apiFetch('/admin/charge-plan-rates')); }
-  useEffect(() => { load().catch(e => setError(e.message)); }, []);
-  async function toggleOrg(org, field) {
-    await apiFetch(`/admin/organisations/${org.uid}`, { method: 'PUT', body: JSON.stringify({ ...org, [field]: !org[field] }) });
-    await load();
+  const [message, setMessage] = useState('');
+  const [search, setSearch] = useState('');
+  const [editingUid, setEditingUid] = useState(null);
+  const [originalOrg, setOriginalOrg] = useState(null);
+
+  async function load() {
+    setOrgs(await apiFetch('/admin/organisations'));
+    setRates(await apiFetch('/admin/charge-plan-rates'));
   }
+
+  useEffect(() => {
+    load().catch(e => setError(e.message));
+  }, []);
+
+  function startEdit(org) {
+    setEditingUid(org.uid);
+    setOriginalOrg({ ...org });
+    setMessage('');
+    setError('');
+  }
+
+  function cancelEdit() {
+    if (originalOrg) {
+      setOrgs(orgs.map(o => o.uid === originalOrg.uid ? originalOrg : o));
+    }
+
+    setEditingUid(null);
+    setOriginalOrg(null);
+    setMessage('');
+    setError('');
+  }
+
+  function updateOrgLocal(uid, field, value) {
+    setOrgs(orgs.map(o => o.uid === uid ? { ...o, [field]: value } : o));
+  }
+
+  async function saveOrg(org) {
+    setError('');
+    setMessage('');
+
+    try {
+      await apiFetch(`/admin/organisations/${org.uid}`, {
+        method: 'PUT',
+        body: JSON.stringify(org)
+      });
+
+      setMessage(`Saved ${org.org_code}`);
+      setEditingUid(null);
+      setOriginalOrg(null);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
   async function addRate() {
     const from = Number(prompt('From quantity?'));
     const toText = prompt('To quantity? Leave blank for no limit');
     const unit = Number(prompt('Unit price?'));
-    await apiFetch('/admin/charge-plan-rates', { method: 'POST', body: JSON.stringify({ charge_plan_code: 'DEFAULT_2026', metric_code: 'SHIPMENT', from_quantity: from, to_quantity: toText ? Number(toText) : null, unit_price: unit }) });
+
+    await apiFetch('/admin/charge-plan-rates', {
+      method: 'POST',
+      body: JSON.stringify({
+        charge_plan_code: 'DEFAULT_2026',
+        metric_code: 'SHIPMENT',
+        from_quantity: from,
+        to_quantity: toText ? Number(toText) : null,
+        unit_price: unit
+      })
+    });
+
     await load();
   }
-  return <section className="card"><h2>Admin Settings</h2>{error && <p className="error">{error}</p>}
-    <h3>Organisations</h3><div className="table-wrap"><table><thead><tr><th>OrgCode</th><th>Name</th><th>Country</th><th>Get Shipment Data</th><th>Excluded</th><th>Charge Plan</th></tr></thead><tbody>{orgs.map(o => <tr key={o.uid}><td>{o.org_code}</td><td>{o.org_full_name}</td><td>{o.country_code}</td><td><input type="checkbox" checked={o.get_shipment_data} onChange={() => toggleOrg(o, 'get_shipment_data')} /></td><td><input type="checkbox" checked={o.excluded} onChange={() => toggleOrg(o, 'excluded')} /></td><td>{o.charge_plan_code}</td></tr>)}</tbody></table></div>
-    <h3>Charge Rates</h3><button onClick={addRate}>Add Rate</button><Table rows={rates} />
+
+  const filteredOrgs = orgs.filter(o => {
+    const text = `${o.org_code || ''} ${o.org_full_name || ''} ${o.country_code || ''}`.toLowerCase();
+    return text.includes(search.toLowerCase());
+  });
+
+  return <section className="card">
+    <h2>Admin Settings</h2>
+
+    {error && <p className="error">{error}</p>}
+    {message && <p className="success">{message}</p>}
+
+    <h3>Organisations</h3>
+
+    <div className="row">
+      <label>
+        Search
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search org code, name, or country"
+        />
+      </label>
+    </div>
+
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>OrgCode</th>
+            <th>Name</th>
+            <th>Country</th>
+            <th>Get Shipment Data</th>
+            <th>Excluded</th>
+            <th>Charge Plan</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {filteredOrgs.map(o => {
+            const isEditing = editingUid === o.uid;
+            const anotherRowIsEditing = editingUid !== null && editingUid !== o.uid;
+
+            return <tr key={o.uid}>
+              <td>{o.org_code}</td>
+              <td>{o.org_full_name}</td>
+
+              <td>
+                <input
+                  value={o.country_code || ''}
+                  disabled={!isEditing}
+                  onChange={e => updateOrgLocal(o.uid, 'country_code', e.target.value)}
+                  placeholder="GB / DE / Multi"
+                />
+              </td>
+
+              <td>
+                <input
+                  type="checkbox"
+                  checked={Boolean(o.get_shipment_data)}
+                  disabled={!isEditing}
+                  onChange={e => updateOrgLocal(o.uid, 'get_shipment_data', e.target.checked)}
+                />
+              </td>
+
+              <td>
+                <input
+                  type="checkbox"
+                  checked={Boolean(o.excluded)}
+                  disabled={!isEditing}
+                  onChange={e => updateOrgLocal(o.uid, 'excluded', e.target.checked)}
+                />
+              </td>
+
+              <td>
+                <input
+                  value={o.charge_plan_code || ''}
+                  disabled={!isEditing}
+                  onChange={e => updateOrgLocal(o.uid, 'charge_plan_code', e.target.value)}
+                  placeholder="DEFAULT_2026"
+                />
+              </td>
+
+              <td>
+                {!isEditing && (
+                  <button disabled={anotherRowIsEditing} onClick={() => startEdit(o)}>
+                    Edit
+                  </button>
+                )}
+
+                {isEditing && (
+                  <div className="row">
+                    <button className="primary" onClick={() => saveOrg(o)}>Save</button>
+                    <button onClick={cancelEdit}>Cancel</button>
+                  </div>
+                )}
+              </td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Charge Rates</h3>
+    <button onClick={addRate}>Add Rate</button>
+    <Table rows={rates} />
   </section>;
 }
 
