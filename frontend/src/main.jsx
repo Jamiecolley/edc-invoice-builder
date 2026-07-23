@@ -47,6 +47,7 @@ function MainPage({ onLogout }) {
   const [rows, setRows] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState('invoice');
 
   async function loadProcesses() { setProcesses(await apiFetch('/invoice-process')); }
   useEffect(() => { loadProcesses().catch(() => {}); }, []);
@@ -81,7 +82,15 @@ function MainPage({ onLogout }) {
   function downloadExcel() { if (selected) window.location.href = `/api/invoice-process/${selected}/download-excel`; }
 
   return <div className="app">
-    <header><h1>eDC Invoice Builder</h1><button onClick={() => { clearToken(); onLogout(); }}>Log out</button></header>
+<header>
+  <h1>eDC Invoice Builder</h1>
+  <div className="row">
+    <button onClick={() => setView('invoice')}>Invoice</button>
+    <button onClick={() => setView('admin')}>Admin Settings</button>
+    <button onClick={() => { clearToken(); onLogout(); }}>Log out</button>
+  </div>
+</header>
+{view === 'invoice' && <>
     <section className="card">
       <h2>Create invoice process</h2>
       <div className="row"><label>From <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} /></label><label>To <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} /></label></div>
@@ -97,7 +106,8 @@ function MainPage({ onLogout }) {
       <div className="tabs"><button onClick={() => loadTab('usage')}>SCM Usage</button><button onClick={() => loadTab('shipments')}>Shipment Data</button><button onClick={() => loadTab('exceptions')}>Warnings</button><button onClick={createFinal}>Create Final Invoice</button><button onClick={() => loadTab('final')}>Final Lines</button><button onClick={downloadExcel}>Download Excel</button></div>
       <Table rows={rows} />
     </section>
-    <AdminPanel />
+</>}
+{view === 'admin' && <AdminPanel />}
   </div>;
 }
 
