@@ -17,6 +17,7 @@ class OrgPayload(BaseModel):
     org_full_name: Optional[str] = None
     country_code: Optional[str] = None
     division: Optional[str] = None
+    org_managed_by: Optional[str] = None
     charge_plan_code: Optional[str] = "DEFAULT_2026"
     is_custom_invoicing: bool = False
     get_shipment_data: bool = False
@@ -35,6 +36,7 @@ def list_orgs(db: Session = Depends(get_db), current_user: User = Depends(get_cu
     "org_full_name": r.org_full_name,
     "country_code": r.country_code,
     "division": r.division,
+    "org_managed_by": r.org_managed_by,
     "charge_plan_code": r.charge_plan_code,
     "is_custom_invoicing": r.is_custom_invoicing,
     "get_shipment_data": r.get_shipment_data,

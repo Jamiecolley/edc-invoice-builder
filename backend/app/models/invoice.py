@@ -32,6 +32,7 @@ class Organisation(Base):
     updated_at = Column("UpdatedAt", DateTime, nullable=True)
     is_freight_manager = Column("IsFreightManager", Boolean, nullable=False, default=False)
     country_multi = Column("CountryMulti", Boolean, nullable=False, default=False)
+    org_managed_by = Column("OrgManagedBy", String(100), nullable=True)
 
 class OrganisationCountrySplit(Base):
     __tablename__ = "tblOrganisationCountrySplit"
@@ -216,6 +217,7 @@ class FinalInvoiceLine(Base):
     org_full_name = Column("OrgFullName", Text, nullable=True)
     country_code = Column("CountryCode", String(10), nullable=True)
     division = Column("Division", String(100), nullable=True)
+    org_managed_by = Column("OrgManagedBy", String(100), nullable=True)
     metric_code = Column("MetricCode", String(50), nullable=False, default="SHIPMENT")
     quantity = Column("Quantity", Integer, nullable=False, default=0)
     unit_price = Column("UnitPrice", Numeric(12, 4), nullable=False, default=0)

@@ -99,13 +99,13 @@ def exceptions(process_number: int, db: Session = Depends(get_db), current_user:
 @router.post("/{process_number}/create-final-invoice")
 def final_invoice(process_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     lines = create_final_invoice(db, process_number)
-    return [{"org_code": l.org_code, "org_full_name": l.org_full_name, "country_code": l.country_code, "quantity": l.quantity, "total_cost": float(l.total_cost), "currency_code": l.currency_code, "source": l.source} for l in lines]
+    return [{"org_code": l.org_code, "org_full_name": l.org_full_name, "country_code": l.country_code, "org_managed_by": l.org_managed_by, "quantity": l.quantity, "total_cost": float(l.total_cost), "currency_code": l.currency_code, "source": l.source} for l in lines]
 
 
 @router.get("/{process_number}/final-lines")
 def final_lines(process_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     rows = db.query(FinalInvoiceLine).filter(FinalInvoiceLine.process_number == process_number).all()
-    return [{"org_code": r.org_code, "org_full_name": r.org_full_name, "country_code": r.country_code, "division": r.division, "quantity": r.quantity, "unit_price": float(r.unit_price), "total_cost": float(r.total_cost), "currency_code": r.currency_code, "source": r.source} for r in rows]
+    return [{"org_code": r.org_code, "org_full_name": r.org_full_name, "country_code": r.country_code, "division": r.division, "org_managed_by": r.org_managed_by,  "quantity": r.quantity, "unit_price": float(r.unit_price), "total_cost": float(r.total_cost), "currency_code": r.currency_code, "source": r.source} for r in rows]
 
 
 @router.get("/{process_number}/download-excel")

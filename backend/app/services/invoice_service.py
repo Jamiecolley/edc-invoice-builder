@@ -26,7 +26,12 @@ def parse_dt(value):
         return None
 
 
-def upsert_organisation(db: Session, org_code: str, org_full_name: Optional[str], is_freight_manager: bool = False):
+def upsert_organisation(
+    db: Session,
+    org_code: str,
+    org_full_name: Optional[str],
+    is_freight_manager: bool = False
+):
     org = db.query(Organisation).filter(Organisation.org_code == org_code).first()
 
     if org is None:
@@ -46,7 +51,6 @@ def upsert_organisation(db: Session, org_code: str, org_full_name: Optional[str]
         org.country_code = "Multi"
 
     return org
-
 
 def make_usage(process_number: int, row: Dict[str, Any]) -> ScmUsage:
     return ScmUsage(
@@ -355,6 +359,7 @@ def create_final_invoice(db: Session, process_number: int) -> List[FinalInvoiceL
                     org_full_name=usage_data["org_full_name"],
                     country_code=country,
                     division=org.division if org else None,
+                    org_managed_by=org.org_managed_by if org else None,
                     metric_code="SHIPMENT",
                     quantity=qty,
                     unit_price=unit,
@@ -411,6 +416,7 @@ def create_final_invoice(db: Session, process_number: int) -> List[FinalInvoiceL
                     org_full_name=usage_data["org_full_name"],
                     country_code=split.country_code,
                     division=org.division if org else None,
+                    org_managed_by=org.org_managed_by if org else None,
                     metric_code="SHIPMENT",
                     quantity=split_qty,
                     unit_price=unit,
@@ -432,6 +438,7 @@ def create_final_invoice(db: Session, process_number: int) -> List[FinalInvoiceL
                 org_full_name=usage_data["org_full_name"],
                 country_code=org.country_code if org else None,
                 division=org.division if org else None,
+                org_managed_by=org.org_managed_by if org else None,
                 metric_code="SHIPMENT",
                 quantity=qty,
                 unit_price=unit,

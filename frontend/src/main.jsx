@@ -489,6 +489,8 @@ function AdminPanel() {
               <th>OrgCode</th>
               <th>Name</th>
               <th>Country</th>
+              <th>Division</th>
+              <th>Org Managed By</th>
               <th>Get Shipment Data</th>
               <th>Country Multi</th>
               <th>Freight Manager</th>
@@ -515,6 +517,24 @@ function AdminPanel() {
                     placeholder="GB / DE / Multi"
                   />
                 </td>
+
+<td>
+  <input
+    value={o.division || ''}
+    disabled={!isEditing}
+    onChange={e => updateOrgLocal(o.uid, 'division', e.target.value)}
+    placeholder="Division"
+  />
+</td>
+
+<td>
+  <input
+    value={o.org_managed_by || ''}
+    disabled={!isEditing}
+    onChange={e => updateOrgLocal(o.uid, 'org_managed_by', e.target.value)}
+    placeholder="Org Managed By"
+  />
+</td>
 
                 <td>
                   <input
