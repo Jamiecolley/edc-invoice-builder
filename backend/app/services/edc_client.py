@@ -3,6 +3,7 @@ from datetime import date, datetime, time
 from typing import Any, Dict, List
 import httpx
 from app.core.config import settings
+import json
 
 REQUIRED_SHIPMENT_COLUMNS = [
     "ID", "BookingNumber", "Booking.BookingNumber", "Booking.Type", "BookingID", "Incoterm",
@@ -76,6 +77,7 @@ async def read_usage(from_date: date, to_date: date, page_size: int = 100) -> Li
 async def read_shipments(org_code: str, from_date: date, to_date: date, page_size: int = 100) -> List[Dict[str, Any]]:
     page = 1
     all_rows: List[Dict[str, Any]] = []
+
     while True:
         body = {
             "Sort": "",
@@ -88,7 +90,7 @@ async def read_shipments(org_code: str, from_date: date, to_date: date, page_siz
                 "Color": "0",
                 "RuleControlInfo": {
                     "Type": 8,
-                    "Code": "Custom",
+                    "Code": "DateTime Range",
                     "StartDate": _iso_local_start(from_date),
                     "EndDate": _iso_local_end(to_date),
                     "FromYear": None,
@@ -101,14 +103,40 @@ async def read_shipments(org_code: str, from_date: date, to_date: date, page_siz
             "UniqueName": "ShipmentSearchPanel",
             "PageSize": page_size,
         }
-        data = await post_edc("/Shipment/Shipments_Read", body, headers={"OrganizationCode": org_code})
+
+        print("Shipments_Read org:", org_code)
+        print("Shipments_Read page:", page)
+        print("Shipments_Read body:")
+        print(json.dumps(body, indent=2, default=str))
+
+        data = await post_edc(
+            "/Shipment/Shipments_Read",
+            body,
+            headers={"OrganizationCode": org_code}
+        )
+
+        print("Shipments_Read total:", data.get("Total"))
+        print("Shipments_Read returned rows:", len(data.get("Data", []) or []))
+
+        sample_rows = (data.get("Data", []) or [])[:5]
+        for row in sample_rows:
+            print("Sample shipment:", {
+                "ID": row.get("ID"),
+                "ShipmentNumber": row.get("ShipmentNumber"),
+                "CreatedTime": row.get("CreatedTime"),
+                "DateCreated": row.get("DateCreated"),
+            })
+
         rows = data.get("Data", []) or []
         total = data.get("Total")
         all_rows.extend(rows)
+
         if total is not None:
             if page >= math.ceil(int(total) / page_size):
                 break
         elif len(rows) < page_size:
             break
+
         page += 1
+
     return all_rows
