@@ -30,6 +30,7 @@ class Organisation(Base):
     excluded = Column("Excluded", Boolean, nullable=False, default=False)
     created_at = Column("CreatedAt", DateTime, nullable=False, server_default=func.now())
     updated_at = Column("UpdatedAt", DateTime, nullable=True)
+    is_freight_manager = Column("IsFreightManager", Boolean, nullable=False, default=False)
 
 
 class ScmUsage(Base):

@@ -21,12 +21,25 @@ class OrgPayload(BaseModel):
     get_shipment_data: bool = False
     finalised: bool = False
     excluded: bool = False
+    is_freight_manager: bool = False
 
 
 @router.get("/organisations")
 def list_orgs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     rows = db.query(Organisation).order_by(Organisation.org_code).all()
-    return [{"uid": r.uid, "org_code": r.org_code, "org_full_name": r.org_full_name, "country_code": r.country_code, "division": r.division, "charge_plan_code": r.charge_plan_code, "is_custom_invoicing": r.is_custom_invoicing, "get_shipment_data": r.get_shipment_data, "finalised": r.finalised, "excluded": r.excluded} for r in rows]
+    return [{
+    "uid": r.uid,
+    "org_code": r.org_code,
+    "org_full_name": r.org_full_name,
+    "country_code": r.country_code,
+    "division": r.division,
+    "charge_plan_code": r.charge_plan_code,
+    "is_custom_invoicing": r.is_custom_invoicing,
+    "get_shipment_data": r.get_shipment_data,
+    "is_freight_manager": r.is_freight_manager,
+    "finalised": r.finalised,
+    "excluded": r.excluded
+} for r in rows]
 
 
 @router.post("/organisations")
@@ -41,12 +54,22 @@ def create_org(payload: OrgPayload, db: Session = Depends(get_db), current_user:
 @router.put("/organisations/{uid}")
 def update_org(uid: int, payload: OrgPayload, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     org = db.query(Organisation).filter(Organisation.uid == uid).first()
+
     if not org:
         raise HTTPException(404, "Organisation not found")
-    for key, value in payload.model_dump().items():
+
+    payload_data = payload.model_dump()
+
+    # IsFreightManager is controlled by OrganizationUsage_Read only.
+    # Admin UI can show it, but must not manually update it.
+    payload_data.pop("is_freight_manager", None)
+
+    for key, value in payload_data.items():
         setattr(org, key, value)
+
     if org.get_shipment_data:
         org.country_code = "Multi"
+
     db.commit()
     return {"status": "updated"}
 

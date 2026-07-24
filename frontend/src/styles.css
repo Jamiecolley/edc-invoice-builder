@@ -125,3 +125,61 @@ th { background: #f7f2eb; position: sticky; top: 0; }
   width: 100%;
   max-width: 100%;
 }
+.org-table table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.org-table th:nth-child(1),
+.org-table td:nth-child(1) {
+  width: 120px;
+}
+
+.org-table th:nth-child(2),
+.org-table td:nth-child(2) {
+  width: 280px;
+}
+
+.org-table th:nth-child(3),
+.org-table td:nth-child(3) {
+  width: 150px;
+}
+
+.org-table th:nth-child(4),
+.org-table td:nth-child(4),
+.org-table th:nth-child(5),
+.org-table td:nth-child(5),
+.org-table th:nth-child(6),
+.org-table td:nth-child(6) {
+  width: 120px;
+  text-align: center;
+}
+
+.org-table th:nth-child(7),
+.org-table td:nth-child(7) {
+  width: 160px;
+}
+
+.org-table th:nth-child(8),
+.org-table td:nth-child(8) {
+  width: 140px;
+  position: sticky;
+  right: 0;
+  background: #fff;
+  z-index: 2;
+}
+
+.org-table th:nth-child(8) {
+  background: #f4efe7;
+  z-index: 3;
+}
+
+.org-table input {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.org-table .row {
+  gap: 6px;
+  flex-wrap: nowrap;
+}

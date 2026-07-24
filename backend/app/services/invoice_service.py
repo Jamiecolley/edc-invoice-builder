@@ -26,16 +26,25 @@ def parse_dt(value):
         return None
 
 
-def upsert_organisation(db: Session, org_code: str, org_full_name: Optional[str]):
+def upsert_organisation(db: Session, org_code: str, org_full_name: Optional[str], is_freight_manager: bool = False):
     org = db.query(Organisation).filter(Organisation.org_code == org_code).first()
+
     if org is None:
-        org = Organisation(org_code=org_code, org_full_name=org_full_name, charge_plan_code="DEFAULT_2026")
+        org = Organisation(
+            org_code=org_code,
+            org_full_name=org_full_name,
+            charge_plan_code="DEFAULT_2026",
+            is_freight_manager=is_freight_manager
+        )
         db.add(org)
     else:
         org.org_full_name = org_full_name or org.org_full_name
+        org.is_freight_manager = is_freight_manager
         org.updated_at = datetime.utcnow()
+
     if org.get_shipment_data:
         org.country_code = "Multi"
+
     return org
 
 
@@ -178,19 +187,22 @@ async def collect_invoice_data(db: Session, from_date: date, to_date: date) -> I
     try:
         usage_rows = await read_usage(from_date, to_date, 100)
 
-        seen_orgs = set()
         current_run_org_codes = set()
 
         for row in usage_rows:
             org_code = row.get("OrgCode")
+
             if not org_code:
                 continue
 
             current_run_org_codes.add(org_code)
 
-            if org_code not in seen_orgs:
-                upsert_organisation(db, org_code, row.get("OrgFullName"))
-                seen_orgs.add(org_code)
+            upsert_organisation(
+                db,
+                org_code,
+                row.get("OrgFullName"),
+                bool(row.get("IsFreightManager") or False)
+            )
 
             db.add(make_usage(process.process_number, row))
 

@@ -330,7 +330,7 @@ function AdminPanel() {
   />
 </div>
 
-      <div className="table-wrap">
+      <div className="table-wrap charge-rates-table">
         <table>
           <thead>
             <tr>
@@ -338,6 +338,7 @@ function AdminPanel() {
               <th>Name</th>
               <th>Country</th>
               <th>Get Shipment Data</th>
+              <th>Freight Manager</th>
               <th>Excluded</th>
               <th>Charge Plan</th>
               <th>Action</th>
@@ -370,7 +371,13 @@ function AdminPanel() {
                     onChange={e => updateOrgLocal(o.uid, 'get_shipment_data', e.target.checked)}
                   />
                 </td>
-
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(o.is_freight_manager)}
+                    disabled
+                  />
+                </td>
                 <td>
                   <input
                     type="checkbox"
