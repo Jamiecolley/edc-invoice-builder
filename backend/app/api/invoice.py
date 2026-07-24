@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.models.invoice import FinalInvoiceLine, InvoiceException, InvoiceProcess, ScmUsage, ShipmentData
+from app.models.invoice import FinalInvoiceLine, InvoiceException, InvoiceProcess, ScmUsage, ShipmentData, Organisation
 from app.services.invoice_service import collect_invoice_data, create_final_invoice, generate_excel
 
 router = APIRouter(prefix="/invoice-process", tags=["invoice"])
@@ -20,9 +20,15 @@ class StartInvoiceRequest(BaseModel):
 
 
 @router.post("/start")
-async def start_invoice(payload: StartInvoiceRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    process = await collect_invoice_data(db, payload.from_date, payload.to_date)
-    return {"process_number": process.process_number, "status": process.status}
+async def start_invoice_process(payload: StartInvoiceRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        process = await collect_invoice_data(db, payload.from_date, payload.to_date)
+        return {
+            "process_number": process.process_number,
+            "status": process.status
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("")
@@ -53,9 +59,42 @@ def shipments(process_number: int, db: Session = Depends(get_db), current_user: 
 
 @router.get("/{process_number}/exceptions")
 def exceptions(process_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    rows = db.query(InvoiceException).filter(InvoiceException.process_number == process_number).all()
-    return [{"uid": r.uid, "org_code": r.org_code, "exception_type": r.exception_type, "severity": r.severity, "message": r.message, "is_resolved": r.is_resolved} for r in rows]
+    rows = db.query(InvoiceException).filter(
+        InvoiceException.process_number == process_number
+    ).all()
 
+    result = []
+
+    for r in rows:
+        org = db.query(Organisation).filter(
+            Organisation.org_code == r.org_code
+        ).first()
+
+        usage_rows = db.query(ScmUsage).filter(
+            ScmUsage.process_number == process_number,
+            ScmUsage.org_code == r.org_code
+        ).all()
+
+        organisation_usage_total = sum(u.shipment_count or 0 for u in usage_rows)
+
+        shipments_read_total = db.query(ShipmentData).filter(
+            ShipmentData.process_number == process_number,
+            ShipmentData.org_code == r.org_code
+        ).count()
+
+        result.append({
+            "org_code": r.org_code,
+            "org_full_name": org.org_full_name if org else None,
+            "get_shipment_data": org.get_shipment_data if org else None,
+            "organization_usage_total": organisation_usage_total,
+            "shipments_read_total": shipments_read_total,
+            "difference": shipments_read_total - organisation_usage_total,
+            "severity": r.severity,
+            "message": r.message,
+            "is_resolved": r.is_resolved
+        })
+
+    return result
 
 @router.post("/{process_number}/create-final-invoice")
 def final_invoice(process_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

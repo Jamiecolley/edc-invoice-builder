@@ -205,17 +205,22 @@ async def collect_invoice_data(db: Session, from_date: date, to_date: date) -> I
         ).all()
 
         for org in orgs:
-            shipment_rows = await read_shipments(org.org_code, from_date, to_date, 100)
+            try:
+                shipment_rows = await read_shipments(org.org_code, from_date, to_date, 100)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Shipments_Read failed for {org.org_code} - {org.org_full_name or 'Unknown organisation'}: {str(exc)}"
+                )
 
             for row in shipment_rows:
                 db.add(make_shipment(db, process.process_number, org.org_code, row))
 
-            usage = db.query(ScmUsage).filter(
+            usage_rows = db.query(ScmUsage).filter(
                 ScmUsage.process_number == process.process_number,
                 ScmUsage.org_code == org.org_code
-            ).first()
+            ).all()
 
-            usage_count = usage.shipment_count if usage else 0
+            usage_count = sum(u.shipment_count or 0 for u in usage_rows)
             shipment_api_count = len(shipment_rows)
 
             # This is a warning only.
@@ -232,7 +237,7 @@ async def collect_invoice_data(db: Session, from_date: date, to_date: date) -> I
                         f"Final invoice will use Shipments_Read because GetShipmentData is enabled."
                     )
                 ))
-
+                
         process.status = "Completed"
         process.completed_at = datetime.utcnow()
         db.commit()
