@@ -8,9 +8,9 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import Session
 
 from app.models.invoice import (
-    ChargePlan, ChargePlanRate, CountryResolutionRule, FinalInvoiceLine,
-    InvoiceException, InvoiceProcess, LocationCountryMapping, Organisation,
-    ScmUsage, ShipmentData, UNLOCODE
+ChargePlan, ChargePlanRate, CountryResolutionRule, FinalInvoiceLine,
+InvoiceException, InvoiceProcess, LocationCountryMapping, Organisation,
+OrganisationCountrySplit, ScmUsage, ShipmentData, UNLOCODE
 )
 from app.services.edc_client import read_shipments, read_usage
 
@@ -287,7 +287,11 @@ def calculate_tier_charge(quantity: int, tiers: List[ChargePlanRate]) -> Tuple[D
 
 
 def create_final_invoice(db: Session, process_number: int) -> List[FinalInvoiceLine]:
-    db.query(FinalInvoiceLine).filter(FinalInvoiceLine.process_number == process_number).delete()
+    db.query(FinalInvoiceLine).filter(
+        FinalInvoiceLine.process_number == process_number
+    ).delete(synchronize_session=False)
+
+    db.flush()
 
     usages = db.query(ScmUsage).filter(
         ScmUsage.process_number == process_number
@@ -362,8 +366,63 @@ def create_final_invoice(db: Session, process_number: int) -> List[FinalInvoiceL
                 db.add(line)
                 lines.append(line)
 
+        elif org and org.country_multi:
+            qty = usage_data["shipment_count"]
+
+            split_rows = db.query(OrganisationCountrySplit).filter(
+                OrganisationCountrySplit.org_code == org_code,
+                OrganisationCountrySplit.is_active == True
+            ).all()
+
+            split_total = sum(Decimal(str(s.percentage or 0)) for s in split_rows)
+
+            if not split_rows:
+                db.add(InvoiceException(
+                    process_number=process_number,
+                    org_code=org_code,
+                    exception_type="COUNTRY_SPLIT_MISSING",
+                    severity="Warning",
+                    message=(
+                        f"CountryMulti is enabled for {org_code}, but no country split rows are configured. "
+                        f"No final invoice lines were created for this organisation."
+                    )
+                ))
+                continue
+
+            if split_total != Decimal("100"):
+                db.add(InvoiceException(
+                    process_number=process_number,
+                    org_code=org_code,
+                    exception_type="COUNTRY_SPLIT_NOT_100",
+                    severity="Warning",
+                    message=(
+                        f"Country split for {org_code} totals {split_total}%, not 100%. "
+                        f"Final invoice lines were still created using the configured percentages."
+                    )
+                ))
+
+            for split in split_rows:
+                split_qty = int(round(qty * (float(split.percentage) / 100), 0))
+                total, unit = calculate_tier_charge(split_qty, tiers)
+
+                line = FinalInvoiceLine(
+                    process_number=process_number,
+                    org_code=org_code,
+                    org_full_name=usage_data["org_full_name"],
+                    country_code=split.country_code,
+                    division=org.division if org else None,
+                    metric_code="SHIPMENT",
+                    quantity=split_qty,
+                    unit_price=unit,
+                    total_cost=total,
+                    currency_code=currency,
+                    source="OrganizationUsage_Read Country Split"
+                )
+
+                db.add(line)
+                lines.append(line)
+
         else:
-            # Standard organisations use OrganizationUsage_Read ShipmentCount.
             qty = usage_data["shipment_count"]
             total, unit = calculate_tier_charge(qty, tiers)
 
@@ -383,7 +442,6 @@ def create_final_invoice(db: Session, process_number: int) -> List[FinalInvoiceL
 
             db.add(line)
             lines.append(line)
-
     db.commit()
     return lines
 

@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional
+from datetime import datetime
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_admin
 from app.models.user import User
-from app.models.invoice import Organisation, ChargePlan, ChargePlanRate, CountryResolutionRule, UNLOCODE, LocationCountryMapping
+from app.models.invoice import Organisation, ChargePlan, ChargePlanRate, CountryResolutionRule, UNLOCODE, LocationCountryMapping, OrganisationCountrySplit
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -22,6 +23,7 @@ class OrgPayload(BaseModel):
     finalised: bool = False
     excluded: bool = False
     is_freight_manager: bool = False
+    country_multi: bool = False
 
 
 @router.get("/organisations")
@@ -38,7 +40,8 @@ def list_orgs(db: Session = Depends(get_db), current_user: User = Depends(get_cu
     "get_shipment_data": r.get_shipment_data,
     "is_freight_manager": r.is_freight_manager,
     "finalised": r.finalised,
-    "excluded": r.excluded
+    "excluded": r.excluded,
+    "country_multi": r.country_multi
 } for r in rows]
 
 
@@ -194,3 +197,75 @@ def locations(db: Session = Depends(get_db), current_user: User = Depends(get_cu
 def create_location(payload: LocationPayload, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     rec = LocationCountryMapping(location_name=payload.location_name, country_code=payload.country_code.upper())
     db.add(rec); db.commit(); return {"uid": rec.uid}
+
+class CountrySplitPayload(BaseModel):
+    org_code: str
+    country_code: str
+    percentage: float
+    is_active: bool = True
+
+
+@router.get("/country-splits/{org_code}")
+def list_country_splits(org_code: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    rows = db.query(OrganisationCountrySplit).filter(
+        OrganisationCountrySplit.org_code == org_code
+    ).order_by(OrganisationCountrySplit.country_code).all()
+
+    return [{
+        "uid": r.uid,
+        "org_code": r.org_code,
+        "country_code": r.country_code,
+        "percentage": float(r.percentage),
+        "is_active": r.is_active
+    } for r in rows]
+
+
+@router.post("/country-splits")
+def create_country_split(payload: CountrySplitPayload, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    rec = OrganisationCountrySplit(
+        org_code=payload.org_code,
+        country_code=payload.country_code.upper(),
+        percentage=payload.percentage,
+        is_active=payload.is_active
+    )
+
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+
+    return {"uid": rec.uid}
+
+
+@router.put("/country-splits/{uid}")
+def update_country_split(uid: int, payload: CountrySplitPayload, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    rec = db.query(OrganisationCountrySplit).filter(
+        OrganisationCountrySplit.uid == uid
+    ).first()
+
+    if not rec:
+        raise HTTPException(404, "Country split row not found")
+
+    rec.org_code = payload.org_code
+    rec.country_code = payload.country_code.upper()
+    rec.percentage = payload.percentage
+    rec.is_active = payload.is_active
+    rec.updated_at = datetime.utcnow()
+
+    db.commit()
+
+    return {"status": "updated"}
+
+
+@router.delete("/country-splits/{uid}")
+def delete_country_split(uid: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    rec = db.query(OrganisationCountrySplit).filter(
+        OrganisationCountrySplit.uid == uid
+    ).first()
+
+    if not rec:
+        raise HTTPException(404, "Country split row not found")
+
+    db.delete(rec)
+    db.commit()
+
+    return {"status": "deleted"}

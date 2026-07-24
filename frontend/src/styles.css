@@ -132,12 +132,12 @@ th { background: #f7f2eb; position: sticky; top: 0; }
 
 .org-table th:nth-child(1),
 .org-table td:nth-child(1) {
-  width: 120px;
+  width: 130px;
 }
 
 .org-table th:nth-child(2),
 .org-table td:nth-child(2) {
-  width: 280px;
+  width: 260px;
 }
 
 .org-table th:nth-child(3),
@@ -150,26 +150,28 @@ th { background: #f7f2eb; position: sticky; top: 0; }
 .org-table th:nth-child(5),
 .org-table td:nth-child(5),
 .org-table th:nth-child(6),
-.org-table td:nth-child(6) {
+.org-table td:nth-child(6),
+.org-table th:nth-child(7),
+.org-table td:nth-child(7) {
   width: 120px;
   text-align: center;
 }
 
-.org-table th:nth-child(7),
-.org-table td:nth-child(7) {
+.org-table th:nth-child(8),
+.org-table td:nth-child(8) {
   width: 160px;
 }
 
-.org-table th:nth-child(8),
-.org-table td:nth-child(8) {
-  width: 140px;
+.org-table th:nth-child(9),
+.org-table td:nth-child(9) {
+  width: 220px;
   position: sticky;
   right: 0;
   background: #fff;
   z-index: 2;
 }
 
-.org-table th:nth-child(8) {
+.org-table th:nth-child(9) {
   background: #f4efe7;
   z-index: 3;
 }
@@ -182,4 +184,56 @@ th { background: #f7f2eb; position: sticky; top: 0; }
 .org-table .row {
   gap: 6px;
   flex-wrap: nowrap;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 20px;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  width: min(900px, 95vw);
+  max-height: 85vh;
+  overflow: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.country-split-table table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.country-split-table th:nth-child(1),
+.country-split-table td:nth-child(1) {
+  width: 160px;
+}
+
+.country-split-table th:nth-child(2),
+.country-split-table td:nth-child(2) {
+  width: 140px;
+}
+
+.country-split-table th:nth-child(3),
+.country-split-table td:nth-child(3) {
+  width: 100px;
+  text-align: center;
+}
+
+.country-split-table th:nth-child(4),
+.country-split-table td:nth-child(4) {
+  width: 220px;
+}
+
+.country-split-table input {
+  max-width: 100%;
+  box-sizing: border-box;
 }

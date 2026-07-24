@@ -125,6 +125,11 @@ function AdminPanel() {
   const [editingRateUid, setEditingRateUid] = useState(null);
   const [originalRate, setOriginalRate] = useState(null);
 
+  const [splitOrg, setSplitOrg] = useState(null);
+  const [countrySplits, setCountrySplits] = useState([]);
+  const [editingSplitUid, setEditingSplitUid] = useState(null);
+  const [originalSplit, setOriginalSplit] = useState(null);
+
   async function load() {
     setOrgs(await apiFetch('/admin/organisations'));
     setRates(await apiFetch('/admin/charge-plan-rates'));
@@ -151,7 +156,17 @@ function AdminPanel() {
   }
 
   function updateOrgLocal(uid, field, value) {
-    setOrgs(orgs.map(o => o.uid === uid ? { ...o, [field]: value } : o));
+    setOrgs(orgs.map(o => {
+      if (o.uid !== uid) return o;
+
+      const updated = { ...o, [field]: value };
+
+      if (field === 'get_shipment_data' && value === true) {
+        updated.country_multi = false;
+      }
+
+      return updated;
+    }));
   }
 
   async function saveOrg(org) {
@@ -168,6 +183,140 @@ function AdminPanel() {
       setEditingOrgUid(null);
       setOriginalOrg(null);
       await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function openCountrySplit(org) {
+    setSplitOrg(org);
+    setEditingSplitUid(null);
+    setOriginalSplit(null);
+    setError('');
+    setMessage('');
+
+    try {
+      const rows = await apiFetch(`/admin/country-splits/${org.org_code}`);
+      setCountrySplits(rows);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  function closeCountrySplit() {
+    setSplitOrg(null);
+    setCountrySplits([]);
+    setEditingSplitUid(null);
+    setOriginalSplit(null);
+  }
+
+  function startEditSplit(split) {
+    setEditingSplitUid(split.uid);
+    setOriginalSplit({ ...split });
+    setError('');
+    setMessage('');
+  }
+
+  function cancelEditSplit() {
+    if (originalSplit && originalSplit.isNew) {
+      setCountrySplits(countrySplits.filter(s => s.uid !== originalSplit.uid));
+    } else if (originalSplit) {
+      setCountrySplits(countrySplits.map(s => s.uid === originalSplit.uid ? originalSplit : s));
+    }
+
+    setEditingSplitUid(null);
+    setOriginalSplit(null);
+  }
+
+  function updateSplitLocal(uid, field, value) {
+    setCountrySplits(countrySplits.map(s => s.uid === uid ? { ...s, [field]: value } : s));
+  }
+
+  function addCountrySplitRow() {
+    if (!splitOrg) return;
+
+    if (editingSplitUid !== null) {
+      setError('Please save or cancel the current split row before adding another one.');
+      return;
+    }
+
+    const tempUid = `new-${Date.now()}`;
+
+    const newSplit = {
+      uid: tempUid,
+      org_code: splitOrg.org_code,
+      country_code: '',
+      percentage: '',
+      is_active: true,
+      isNew: true
+    };
+
+    setCountrySplits([...countrySplits, newSplit]);
+    setEditingSplitUid(tempUid);
+    setOriginalSplit({ ...newSplit });
+  }
+
+  async function saveCountrySplit(split) {
+    setError('');
+    setMessage('');
+
+    if (!split.country_code || split.percentage === '') {
+      setError('Country Code and Percentage are required.');
+      return;
+    }
+
+    const payload = {
+      org_code: splitOrg.org_code,
+      country_code: split.country_code.toUpperCase(),
+      percentage: Number(split.percentage),
+      is_active: Boolean(split.is_active)
+    };
+
+    try {
+      if (split.isNew) {
+        await apiFetch('/admin/country-splits', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        setMessage(`Added country split for ${splitOrg.org_code}`);
+      } else {
+        await apiFetch(`/admin/country-splits/${split.uid}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+
+        setMessage(`Saved country split for ${splitOrg.org_code}`);
+      }
+
+      const rows = await apiFetch(`/admin/country-splits/${splitOrg.org_code}`);
+      setCountrySplits(rows);
+      setEditingSplitUid(null);
+      setOriginalSplit(null);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function deleteCountrySplit(split) {
+    if (split.isNew) {
+      setCountrySplits(countrySplits.filter(s => s.uid !== split.uid));
+      setEditingSplitUid(null);
+      setOriginalSplit(null);
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete ${split.country_code} split for ${splitOrg.org_code}?`);
+    if (!confirmed) return;
+
+    try {
+      await apiFetch(`/admin/country-splits/${split.uid}`, {
+        method: 'DELETE'
+      });
+
+      const rows = await apiFetch(`/admin/country-splits/${splitOrg.org_code}`);
+      setCountrySplits(rows);
+      setMessage(`Deleted country split for ${splitOrg.org_code}`);
     } catch (e) {
       setError(e.message);
     }
@@ -273,7 +422,6 @@ function AdminPanel() {
     }
 
     const confirmed = window.confirm(`Delete rate ${rate.charge_plan_code} from ${rate.from_quantity}?`);
-
     if (!confirmed) return;
 
     setError('');
@@ -295,6 +443,10 @@ function AdminPanel() {
     const text = `${o.org_code || ''} ${o.org_full_name || ''} ${o.country_code || ''}`.toLowerCase();
     return text.includes(search.toLowerCase());
   });
+
+  const splitTotal = countrySplits
+    .filter(s => Boolean(s.is_active))
+    .reduce((total, s) => total + Number(s.percentage || 0), 0);
 
   return <section className="card">
     <h2>Admin Settings</h2>
@@ -321,16 +473,16 @@ function AdminPanel() {
     {adminTab === 'organisations' && <>
       <h3>Organisations</h3>
 
-<div className="admin-search-row">
-  <label>Search</label>
-  <input
-    value={search}
-    onChange={e => setSearch(e.target.value)}
-    placeholder="Search org code, name, or country"
-  />
-</div>
+      <div className="admin-search-row">
+        <label>Search</label>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search org code, name, or country"
+        />
+      </div>
 
-      <div className="table-wrap charge-rates-table">
+      <div className="table-wrap org-table">
         <table>
           <thead>
             <tr>
@@ -338,6 +490,7 @@ function AdminPanel() {
               <th>Name</th>
               <th>Country</th>
               <th>Get Shipment Data</th>
+              <th>Country Multi</th>
               <th>Freight Manager</th>
               <th>Excluded</th>
               <th>Charge Plan</th>
@@ -371,6 +524,16 @@ function AdminPanel() {
                     onChange={e => updateOrgLocal(o.uid, 'get_shipment_data', e.target.checked)}
                   />
                 </td>
+
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(o.country_multi)}
+                    disabled={!isEditing || Boolean(o.get_shipment_data)}
+                    onChange={e => updateOrgLocal(o.uid, 'country_multi', e.target.checked)}
+                  />
+                </td>
+
                 <td>
                   <input
                     type="checkbox"
@@ -378,6 +541,7 @@ function AdminPanel() {
                     disabled
                   />
                 </td>
+
                 <td>
                   <input
                     type="checkbox"
@@ -397,11 +561,19 @@ function AdminPanel() {
                 </td>
 
                 <td>
-                  {!isEditing && (
-                    <button disabled={anotherRowIsEditing} onClick={() => startEditOrg(o)}>
-                      Edit
-                    </button>
-                  )}
+{!isEditing && (
+  <div className="row">
+    <button disabled={anotherRowIsEditing} onClick={() => startEditOrg(o)}>
+      Edit
+    </button>
+
+    {Boolean(o.country_multi) && (
+      <button onClick={() => openCountrySplit(o)}>
+        Country Split
+      </button>
+    )}
+  </div>
+)}
 
                   {isEditing && (
                     <div className="row">
@@ -421,8 +593,8 @@ function AdminPanel() {
       <h3>Charge Rates</h3>
 
       <button onClick={addRate}>Add Rate</button>
-      
-<div className="table-wrap charge-rates-table">
+
+      <div className="table-wrap charge-rates-table">
         <table>
           <thead>
             <tr>
@@ -521,6 +693,106 @@ function AdminPanel() {
         </table>
       </div>
     </>}
+
+    {splitOrg && (
+      <div className="modal-backdrop">
+        <div className="modal-card">
+          <h3>Country Split - {splitOrg.org_code}</h3>
+          <p className="muted">{splitOrg.org_full_name}</p>
+
+          <div className="row">
+            <button onClick={addCountrySplitRow}>Add Row</button>
+            <button onClick={closeCountrySplit}>Close</button>
+          </div>
+
+          <p className={splitTotal === 100 ? 'success' : 'error'}>
+            Total active split: {splitTotal}%
+          </p>
+
+          {splitOrg.get_shipment_data && (
+            <p className="error">
+              Get Shipment Data is enabled for this organisation. Country split will not be used for final invoice calculation.
+            </p>
+          )}
+
+          {!splitOrg.country_multi && (
+            <p className="error">
+              Country Multi is not enabled for this organisation. Enable Country Multi on the organisation row to use these splits.
+            </p>
+          )}
+
+          <div className="table-wrap country-split-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Country</th>
+                  <th>Percentage</th>
+                  <th>Active</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {countrySplits.map(s => {
+                  const isEditing = editingSplitUid === s.uid;
+                  const anotherSplitIsEditing = editingSplitUid !== null && editingSplitUid !== s.uid;
+
+                  return <tr key={s.uid}>
+                    <td>
+                      <input
+                        value={s.country_code || ''}
+                        disabled={!isEditing}
+                        onChange={e => updateSplitLocal(s.uid, 'country_code', e.target.value)}
+                        placeholder="FR / DE / GB"
+                      />
+                    </td>
+
+                    <td>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={s.percentage ?? ''}
+                        disabled={!isEditing}
+                        onChange={e => updateSplitLocal(s.uid, 'percentage', e.target.value)}
+                      />
+                    </td>
+
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(s.is_active)}
+                        disabled={!isEditing}
+                        onChange={e => updateSplitLocal(s.uid, 'is_active', e.target.checked)}
+                      />
+                    </td>
+
+                    <td>
+                      {!isEditing && (
+                        <div className="row">
+                          <button disabled={anotherSplitIsEditing} onClick={() => startEditSplit(s)}>
+                            Edit
+                          </button>
+                          <button disabled={anotherSplitIsEditing} onClick={() => deleteCountrySplit(s)}>
+                            Delete
+                          </button>
+                        </div>
+                      )}
+
+                      {isEditing && (
+                        <div className="row">
+                          <button className="primary" onClick={() => saveCountrySplit(s)}>Save</button>
+                          <button onClick={cancelEditSplit}>Cancel</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    )}
   </section>;
 }
 

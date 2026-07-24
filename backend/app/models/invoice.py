@@ -31,7 +31,18 @@ class Organisation(Base):
     created_at = Column("CreatedAt", DateTime, nullable=False, server_default=func.now())
     updated_at = Column("UpdatedAt", DateTime, nullable=True)
     is_freight_manager = Column("IsFreightManager", Boolean, nullable=False, default=False)
+    country_multi = Column("CountryMulti", Boolean, nullable=False, default=False)
 
+class OrganisationCountrySplit(Base):
+    __tablename__ = "tblOrganisationCountrySplit"
+
+    uid = Column("UID", Integer, primary_key=True)
+    org_code = Column("OrgCode", String(50), nullable=False, index=True)
+    country_code = Column("CountryCode", String(10), nullable=False)
+    percentage = Column("Percentage", Numeric(8, 4), nullable=False, default=0)
+    is_active = Column("IsActive", Boolean, nullable=False, default=True)
+    created_at = Column("CreatedAt", DateTime, nullable=False, server_default=func.now())
+    updated_at = Column("UpdatedAt", DateTime, nullable=True)
 
 class ScmUsage(Base):
     __tablename__ = "tblScmUsage"
