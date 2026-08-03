@@ -8,9 +8,8 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import Session
 
 from app.models.invoice import (
-ChargePlan, ChargePlanRate, CountryResolutionRule, FinalInvoiceLine,
-InvoiceException, InvoiceProcess, LocationCountryMapping, Organisation,
-OrganisationCountrySplit, ScmUsage, ShipmentData, UNLOCODE
+ChargePlan, ChargePlanRate, FinalInvoiceLine, InvoiceException, InvoiceProcess,
+CountryCodeMapping, Organisation, OrganisationCountrySplit, ScmUsage, ShipmentData
 )
 from app.services.edc_client import read_shipments, read_usage
 
@@ -105,37 +104,62 @@ def make_usage(process_number: int, row: Dict[str, Any]) -> ScmUsage:
     )
 
 
+def _first_two(value: Any) -> Optional[str]:
+    normalized = str(value or "").strip()
+    return normalized[:2].upper() if len(normalized) >= 2 else None
+
+
+def _resolve_or_queue_country_mapping(
+    db: Session, location: Any, source: str
+) -> Optional[Tuple[str, str]]:
+    location_name = str(location or "").strip()
+    if not location_name:
+        return None
+
+    rec = db.query(CountryCodeMapping).filter(
+        CountryCodeMapping.location_name.ilike(location_name)
+    ).first()
+    if rec:
+        country_code = str(rec.country_code or "").strip().upper()
+        return (country_code, source) if country_code else None
+
+    # Queue unresolved locations for an admin to complete. An empty string is
+    # used because CountryCode is non-nullable in existing databases.
+    db.add(CountryCodeMapping(location_name=location_name, country_code=""))
+    return None
+
+
 def resolve_country(db: Session, org_code: str, row: Dict[str, Any]) -> Tuple[str, str]:
-    rules = db.query(CountryResolutionRule).filter(CountryResolutionRule.org_code == org_code).order_by(CountryResolutionRule.priority_order).all()
-    if not rules:
-        rules = [
-            CountryResolutionRule(source_field="PickupFromCountryCode", lookup_type="DIRECT"),
-            CountryResolutionRule(source_field="DeliveryToCountryCode", lookup_type="DIRECT"),
-            CountryResolutionRule(source_field="DischargePort", lookup_type="UNLOCODE"),
-            CountryResolutionRule(source_field="LastDischarge", lookup_type="UNLOCODE"),
-            CountryResolutionRule(source_field="ConsigneeCountryCode", lookup_type="DIRECT"),
-        ]
-    for rule in rules:
-        value = row.get(rule.source_field)
-        if not value and rule.source_field == "ConsignorCountryCode":
-            value = (row.get("ConsignorAddress") or {}).get("CountryCode")
-        if not value and rule.source_field == "ConsigneeCountryCode":
-            value = (row.get("ConsigneeAddress") or {}).get("CountryCode")
-        if not value:
-            continue
-        lookup_type = rule.lookup_type.upper()
-        if lookup_type == "DIRECT":
-            return str(value).upper(), rule.source_field
-        if lookup_type == "UNLOCODE":
-            rec = db.query(UNLOCODE).filter(UNLOCODE.unlocode == value).first()
-            if rec:
-                return rec.country_code.upper(), rule.source_field
-            if len(str(value)) >= 2:
-                return str(value)[:2].upper(), rule.source_field
-        if lookup_type == "LOCATION_NAME":
-            rec = db.query(LocationCountryMapping).filter(LocationCountryMapping.location_name.ilike(str(value))).first()
-            if rec:
-                return rec.country_code.upper(), rule.source_field
+    org = db.query(Organisation).filter(Organisation.org_code == org_code).first()
+    basis = (org.shipment_country_basis if org else None) or "ORIGIN"
+
+    if basis.upper() == "DESTINATION":
+        consignee_code = (row.get("ConsigneeAddress") or {}).get("CountryCode")
+        if consignee_code:
+            return str(consignee_code).strip().upper(), "ConsigneeAddress.CountryCode"
+        for field in ("LastDischarge", "DischargePort"):
+            code = _first_two(row.get(field))
+            if code:
+                return code, f"{field} (first 2 characters)"
+        destination = row.get("Destination")
+        if destination:
+            resolved = _resolve_or_queue_country_mapping(
+                db, destination, "Destination mapping"
+            )
+            if resolved:
+                return resolved
+    else:
+        pickup_code = row.get("PickupFromCountryCode")
+        if pickup_code:
+            return str(pickup_code).strip().upper(), "PickupFromCountryCode"
+        first_load_code = _first_two(row.get("FirstLoad"))
+        if first_load_code:
+            return first_load_code, "FirstLoad (first 2 characters)"
+        origin = row.get("Origin") or row.get("OriginPort")
+        if origin:
+            resolved = _resolve_or_queue_country_mapping(db, origin, "Origin mapping")
+            if resolved:
+                return resolved
     return "Unknown", "Unresolved"
 
 
@@ -163,7 +187,7 @@ def make_shipment(db: Session, process_number: int, org_code: str, row: Dict[str
         pickup_from_country=row.get("PickupFromCountry"),
         pickup_from_country_code=row.get("PickupFromCountryCode"),
         pickup_from_city=row.get("PickupFromCity"),
-        origin_port=row.get("OriginPort"),
+        origin_port=row.get("Origin") or row.get("OriginPort"),
         first_load=row.get("FirstLoad"),
         consignee_name=row.get("ConsigneeName"),
         consignee_country=consignee.get("Country"),
@@ -275,19 +299,21 @@ async def collect_invoice_data(db: Session, from_date: date, to_date: date) -> I
         raise
 
 def calculate_tier_charge(quantity: int, tiers: List[ChargePlanRate]) -> Tuple[Decimal, Decimal]:
+    # Graduated pricing: each tier's unit price applies only to the shipments
+    # within that tier. The displayed unit price is the blended average.
     total = Decimal("0")
-    first_rate = Decimal("0")
+
     for tier in sorted(tiers, key=lambda t: t.from_quantity):
         if quantity < tier.from_quantity:
             continue
+
         upper = tier.to_quantity if tier.to_quantity is not None else quantity
-        chargeable_qty = min(quantity, upper) - tier.from_quantity + 1
-        if chargeable_qty > 0:
-            rate = Decimal(tier.unit_price)
-            if first_rate == 0:
-                first_rate = rate
-            total += Decimal(chargeable_qty) * rate
-    return total, first_rate
+        chargeable_quantity = min(quantity, upper) - tier.from_quantity + 1
+        if chargeable_quantity > 0:
+            total += Decimal(chargeable_quantity) * Decimal(tier.unit_price)
+
+    blended_unit_price = total / Decimal(quantity) if quantity > 0 else Decimal("0")
+    return total, blended_unit_price
 
 
 def create_final_invoice(db: Session, process_number: int) -> List[FinalInvoiceLine]:

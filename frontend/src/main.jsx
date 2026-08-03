@@ -32,10 +32,52 @@ function Login({ onLogin }) {
   </form></div>;
 }
 
-function Table({ rows }) {
+const TABLE_HEADER_LABELS = {
+  org_code: 'Organisation',
+  org_full_name: 'Organisation Name',
+  shipment_count: 'Shipments',
+  order_count: 'Orders',
+  booking_count: 'Bookings',
+  year_month: 'Period',
+  organization_usage_total: 'Organisation Usage Total',
+  shipments_read_total: 'Shipments Data Total',
+  difference: 'Difference',
+  severity: 'Severity',
+  unique_consign_ref: 'Shipment Number',
+  date_created: 'Shipment Created Date',
+  transport_mode: 'Transport Mode',
+  resolved_countr: 'Resolved Country Code',
+  resolved_country_code: 'Resolved Country Code',
+  resolved_country_source: 'Resolved Country Code Source',
+  country_code: 'Country Code',
+  division: 'Division',
+  org_managed_by: 'Organisation Managed By',
+  charge_plan_code: 'Charge Plan',
+  quantity: 'Number of Shipments',
+  unit_price: 'Cost per Shipment',
+  total_cost: 'Total Cost',
+  currency_code: 'Currency',
+  source: 'Source'
+};
+
+function formatTableValue(header, value) {
+  if (value == null) return '';
+
+  if (header === 'date_created') {
+    const minutePrecision = String(value).match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/);
+    if (minutePrecision) return minutePrecision[1];
+  }
+
+  return String(value);
+}
+
+function Table({ rows, view }) {
   if (!rows || rows.length === 0) return <p className="muted">No rows to show.</p>;
-  const headers = Object.keys(rows[0]);
-  return <div className="table-wrap"><table><thead><tr>{headers.map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map((r, i) => <tr key={i}>{headers.map(h => <td key={h}>{String(r[h] ?? '')}</td>)}</tr>)}</tbody></table></div>;
+  const hiddenHeaders = view === 'exceptions'
+    ? new Set(['get_shipment_data', 'message', 'is_resolved'])
+    : new Set();
+  const headers = Object.keys(rows[0]).filter(header => header.toLowerCase() !== 'uid' && !hiddenHeaders.has(header));
+  return <div className={`table-wrap data-review-table data-review-table--${view}`}><table><thead><tr>{headers.map(h => <th className={`column-${h}`} key={h}>{TABLE_HEADER_LABELS[h] || h}</th>)}</tr></thead><tbody>{rows.map((r, i) => <tr key={i}>{headers.map(h => <td className={`column-${h}`} key={h}>{formatTableValue(h, r[h])}</td>)}</tr>)}</tbody></table></div>;
 }
 
 function MainPage({ onLogout }) {
@@ -52,17 +94,27 @@ function MainPage({ onLogout }) {
   async function loadProcesses() { setProcesses(await apiFetch('/invoice-process')); }
   useEffect(() => { loadProcesses().catch(() => {}); }, []);
 
+  function formatDateInput(year, month, day) {
+    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  function setMonthRange(year, month) {
+    const firstDate = new Date(year, month, 1);
+    const rangeYear = firstDate.getFullYear();
+    const rangeMonth = firstDate.getMonth();
+    const lastDay = new Date(rangeYear, rangeMonth + 1, 0).getDate();
+    setFromDate(formatDateInput(rangeYear, rangeMonth, 1));
+    setToDate(formatDateInput(rangeYear, rangeMonth, lastDay));
+  }
+
   function setLastMonth() {
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const end = new Date(now.getFullYear(), now.getMonth(), 0);
-    setFromDate(start.toISOString().slice(0,10)); setToDate(end.toISOString().slice(0,10));
+    setMonthRange(now.getFullYear(), now.getMonth() - 1);
   }
+
   function setThisMonth() {
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth()+1, 0);
-    setFromDate(start.toISOString().slice(0,10)); setToDate(end.toISOString().slice(0,10));
+    setMonthRange(now.getFullYear(), now.getMonth());
   }
   async function start() {
     setLoading(true); setMessage('Collecting data from eDC APIs...');
@@ -78,7 +130,11 @@ function MainPage({ onLogout }) {
     const path = nextTab === 'usage' ? 'usage' : nextTab === 'shipments' ? 'shipments' : nextTab === 'exceptions' ? 'exceptions' : 'final-lines';
     setRows(await apiFetch(`/invoice-process/${processNumber}/${path}`));
   }
-  async function createFinal() { if (!selected) return; setRows(await apiFetch(`/invoice-process/${selected}/create-final-invoice`, { method: 'POST' })); setTab('final'); }
+  async function loadFinalLines() {
+    if (!selected) return;
+    setTab('final');
+    setRows(await apiFetch(`/invoice-process/${selected}/create-final-invoice`, { method: 'POST' }));
+  }
   function downloadExcel() { if (selected) window.location.href = `/api/invoice-process/${selected}/download-excel`; }
 
   return <div className="app">
@@ -93,8 +149,11 @@ function MainPage({ onLogout }) {
 {view === 'invoice' && <>
     <section className="card">
       <h2>Create invoice process</h2>
-      <div className="row"><label>From <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} /></label><label>To <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} /></label></div>
-      <div className="row"><button onClick={setThisMonth}>This Month</button><button onClick={setLastMonth}>Last Month</button><button className="primary" onClick={start} disabled={loading || !fromDate || !toDate}>{loading ? 'Running...' : 'Collect Data'}</button></div>
+      <div className="invoice-date-fields">
+        <label>From <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} /></label>
+        <label>To <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} /></label>
+      </div>
+      <div className="invoice-actions"><button onClick={setThisMonth}>This Month</button><button onClick={setLastMonth}>Last Month</button><button className="primary" onClick={start} disabled={loading || !fromDate || !toDate}>{loading ? 'Running...' : 'Collect Data'}</button></div>
       {message && <p className={message.startsWith('Failed') ? 'error' : 'success'}>{message}</p>}
     </section>
     <section className="card">
@@ -103,8 +162,8 @@ function MainPage({ onLogout }) {
     </section>
     <section className="card">
       <h2>Data Review {selected ? `- Process ${selected}` : ''}</h2>
-      <div className="tabs"><button onClick={() => loadTab('usage')}>SCM Usage</button><button onClick={() => loadTab('shipments')}>Shipment Data</button><button onClick={() => loadTab('exceptions')}>Warnings</button><button onClick={createFinal}>Create Final Invoice</button><button onClick={() => loadTab('final')}>Final Lines</button><button onClick={downloadExcel}>Download Excel</button></div>
-      <Table rows={rows} />
+      <div className="tabs"><button onClick={() => loadTab('usage')}>SCM Usage</button><button onClick={() => loadTab('shipments')}>Shipment Data</button><button onClick={() => loadTab('exceptions')}>Warnings</button><button onClick={loadFinalLines}>Final Lines</button><button onClick={downloadExcel}>Download Excel</button></div>
+      <Table rows={rows} view={tab} />
     </section>
 </>}
 {view === 'admin' && <AdminPanel />}
@@ -114,6 +173,7 @@ function MainPage({ onLogout }) {
 function AdminPanel() {
   const [orgs, setOrgs] = useState([]);
   const [rates, setRates] = useState([]);
+  const [countryCodeMappings, setCountryCodeMappings] = useState([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
@@ -124,6 +184,8 @@ function AdminPanel() {
 
   const [editingRateUid, setEditingRateUid] = useState(null);
   const [originalRate, setOriginalRate] = useState(null);
+  const [editingOriginUid, setEditingOriginUid] = useState(null);
+  const [originalOrigin, setOriginalOrigin] = useState(null);
 
   const [splitOrg, setSplitOrg] = useState(null);
   const [countrySplits, setCountrySplits] = useState([]);
@@ -133,6 +195,7 @@ function AdminPanel() {
   async function load() {
     setOrgs(await apiFetch('/admin/organisations'));
     setRates(await apiFetch('/admin/charge-plan-rates'));
+    setCountryCodeMappings(await apiFetch('/admin/country-code-mappings'));
   }
 
   useEffect(() => {
@@ -163,6 +226,11 @@ function AdminPanel() {
 
       if (field === 'get_shipment_data' && value === true) {
         updated.country_multi = false;
+        updated.shipment_country_basis = updated.shipment_country_basis || 'ORIGIN';
+      }
+
+      if (field === 'get_shipment_data' && value === false) {
+        updated.shipment_country_basis = null;
       }
 
       return updated;
@@ -344,7 +412,7 @@ function AdminPanel() {
     setRates(rates.map(r => r.uid === uid ? { ...r, [field]: value } : r));
   }
 
-  function addRate() {
+  function addRate(chargePlanCode = '') {
     if (editingRateUid !== null) {
       setError('Please save or cancel the current rate before adding another one.');
       return;
@@ -354,7 +422,7 @@ function AdminPanel() {
 
     const newRate = {
       uid: tempUid,
-      charge_plan_code: 'DEFAULT_2026',
+      charge_plan_code: chargePlanCode,
       metric_code: 'SHIPMENT',
       from_quantity: '',
       to_quantity: '',
@@ -439,10 +507,70 @@ function AdminPanel() {
     }
   }
 
+  function addCountryCodeMapping() {
+    if (editingOriginUid !== null) return setError('Please save or cancel the current country code mapping first.');
+    const uid = `new-origin-${Date.now()}`;
+    const row = { uid, location_name: '', country_code: '', isNew: true };
+    setCountryCodeMappings([...countryCodeMappings, row]);
+    setEditingOriginUid(uid);
+    setOriginalOrigin({ ...row });
+    setError(''); setMessage('');
+  }
+
+  function startEditOrigin(row) {
+    setEditingOriginUid(row.uid);
+    setOriginalOrigin({ ...row });
+    setError(''); setMessage('');
+  }
+
+  function updateOriginLocal(uid, field, value) {
+    setCountryCodeMappings(countryCodeMappings.map(row => row.uid === uid ? { ...row, [field]: value } : row));
+  }
+
+  function cancelEditOrigin() {
+    if (originalOrigin?.isNew) {
+      setCountryCodeMappings(countryCodeMappings.filter(row => row.uid !== originalOrigin.uid));
+    } else if (originalOrigin) {
+      setCountryCodeMappings(countryCodeMappings.map(row => row.uid === originalOrigin.uid ? originalOrigin : row));
+    }
+    setEditingOriginUid(null); setOriginalOrigin(null);
+  }
+
+  async function saveCountryCodeMapping(row) {
+    if (!row.location_name.trim() || !row.country_code.trim()) return setError('Location and Country Code are required.');
+    const payload = { location_name: row.location_name.trim(), country_code: row.country_code.trim().toUpperCase() };
+    try {
+      await apiFetch(row.isNew ? '/admin/country-code-mappings' : `/admin/country-code-mappings/${row.uid}`, {
+        method: row.isNew ? 'POST' : 'PUT', body: JSON.stringify(payload)
+      });
+      setEditingOriginUid(null); setOriginalOrigin(null);
+      setMessage(`Saved country code mapping for ${payload.location_name}`);
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
+  async function deleteCountryCodeMapping(row) {
+    if (!window.confirm(`Delete country code mapping for ${row.location_name}?`)) return;
+    try {
+      await apiFetch(`/admin/country-code-mappings/${row.uid}`, { method: 'DELETE' });
+      setMessage(`Deleted country code mapping for ${row.location_name}`);
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
   const filteredOrgs = orgs.filter(o => {
     const text = `${o.org_code || ''} ${o.org_full_name || ''} ${o.country_code || ''}`.toLowerCase();
     return text.includes(search.toLowerCase());
   });
+  const availableChargePlans = [...new Set(rates
+    .filter(rate => Boolean(rate.is_active) && rate.charge_plan_code)
+    .map(rate => rate.charge_plan_code))].sort();
+  const chargeRateGroups = Object.values(rates.reduce((groups, rate) => {
+    const key = rate.charge_plan_code || `new-${rate.uid}`;
+    if (!groups[key]) groups[key] = { chargePlanCode: rate.charge_plan_code, rates: [] };
+    groups[key].rates.push(rate);
+    return groups;
+  }, {}));
 
   const splitTotal = countrySplits
     .filter(s => Boolean(s.is_active))
@@ -465,6 +593,12 @@ function AdminPanel() {
       >
         Charge Rates
       </button>
+      <button
+        className={adminTab === 'origins' ? 'selected' : ''}
+        onClick={() => setAdminTab('origins')}
+      >
+        Country Code Mappings
+      </button>
     </div>
 
     {error && <p className="error">{error}</p>}
@@ -486,17 +620,18 @@ function AdminPanel() {
         <table>
           <thead>
             <tr>
-              <th>OrgCode</th>
-              <th>Name</th>
-              <th>Country</th>
-              <th>Division</th>
-              <th>Org Managed By</th>
-              <th>Get Shipment Data</th>
-              <th>Country Multi</th>
-              <th>Freight Manager</th>
-              <th>Excluded</th>
-              <th>Charge Plan</th>
-              <th>Action</th>
+              <th><span>OrgCode</span></th>
+              <th><span>Name</span></th>
+              <th><span>Country</span></th>
+              <th><span>Division</span></th>
+              <th><span>Org Managed By</span></th>
+              <th><span>Get Shipment Data</span></th>
+              <th><span>Billing Country</span></th>
+              <th><span>Country Multi</span></th>
+              <th><span>Freight Manager</span></th>
+              <th><span>Excluded</span></th>
+              <th><span>Charge Plan</span></th>
+              <th className="org-actions"><span>Action</span></th>
             </tr>
           </thead>
 
@@ -546,6 +681,18 @@ function AdminPanel() {
                 </td>
 
                 <td>
+                  <select
+                    value={o.shipment_country_basis || ''}
+                    disabled={!isEditing || !Boolean(o.get_shipment_data)}
+                    onChange={e => updateOrgLocal(o.uid, 'shipment_country_basis', e.target.value)}
+                  >
+                    {!o.get_shipment_data && <option value="">Not applicable</option>}
+                    <option value="ORIGIN">Origin</option>
+                    <option value="DESTINATION">Destination</option>
+                  </select>
+                </td>
+
+                <td>
                   <input
                     type="checkbox"
                     checked={Boolean(o.country_multi)}
@@ -572,28 +719,33 @@ function AdminPanel() {
                 </td>
 
                 <td>
-                  <input
+                  <select
                     value={o.charge_plan_code || ''}
                     disabled={!isEditing}
                     onChange={e => updateOrgLocal(o.uid, 'charge_plan_code', e.target.value)}
-                    placeholder="DEFAULT_2026"
-                  />
+                  >
+                    <option value="">Select a plan</option>
+                    {o.charge_plan_code && !availableChargePlans.includes(o.charge_plan_code) && (
+                      <option value={o.charge_plan_code}>{o.charge_plan_code} (no active rates)</option>
+                    )}
+                    {availableChargePlans.map(plan => <option value={plan} key={plan}>{plan}</option>)}
+                  </select>
                 </td>
 
-                <td>
-{!isEditing && (
-  <div className="row">
-    <button disabled={anotherRowIsEditing} onClick={() => startEditOrg(o)}>
-      Edit
-    </button>
+                <td className="org-actions">
+                  {!isEditing && (
+                    <div className="row">
+                      <button disabled={anotherRowIsEditing} onClick={() => startEditOrg(o)}>
+                        Edit
+                      </button>
 
-    {Boolean(o.country_multi) && (
-      <button onClick={() => openCountrySplit(o)}>
-        Country Split
-      </button>
-    )}
-  </div>
-)}
+                      {Boolean(o.country_multi) && (
+                        <button onClick={() => openCountrySplit(o)}>
+                          Country Split
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {isEditing && (
                     <div className="row">
@@ -612,7 +764,9 @@ function AdminPanel() {
     {adminTab === 'rates' && <>
       <h3>Charge Rates</h3>
 
-      <button onClick={addRate}>Add Rate</button>
+      <p className="muted">Create one Charge Plan, then add its quantity tiers. Each tier charges only the shipments within that range; Cost per Shipment is the blended average.</p>
+
+      <button onClick={() => addRate()}>Add Charge Plan</button>
 
       <div className="table-wrap charge-rates-table">
         <table>
@@ -629,18 +783,21 @@ function AdminPanel() {
           </thead>
 
           <tbody>
-            {rates.map(r => {
+            {chargeRateGroups.flatMap(group => group.rates.map((r, tierIndex) => {
               const isEditing = editingRateUid === r.uid;
               const anotherRateIsEditing = editingRateUid !== null && editingRateUid !== r.uid;
 
               return <tr key={r.uid}>
-                <td>
-                  <input
-                    value={r.charge_plan_code || ''}
-                    disabled={!isEditing}
-                    onChange={e => updateRateLocal(r.uid, 'charge_plan_code', e.target.value)}
-                  />
-                </td>
+                {tierIndex === 0 && <td rowSpan={group.rates.length} className="charge-plan-group">
+                  {r.isNew
+                    ? <input
+                        value={r.charge_plan_code || ''}
+                        disabled={!isEditing}
+                        onChange={e => updateRateLocal(r.uid, 'charge_plan_code', e.target.value)}
+                        placeholder="Plan name"
+                      />
+                    : <><strong>{group.chargePlanCode}</strong><button disabled={editingRateUid !== null} onClick={() => addRate(group.chargePlanCode)}>Add Tier</button></>}
+                </td>}
 
                 <td>
                   <input
@@ -708,8 +865,31 @@ function AdminPanel() {
                   )}
                 </td>
               </tr>;
-            })}
+            }))}
           </tbody>
+        </table>
+      </div>
+    </>}
+
+    {adminTab === 'origins' && <>
+      <h3>Country Code Mappings</h3>
+      <p className="muted">Maps a shipment location or place name to a country code. Used for the Origin/OriginPort and Destination fallbacks.</p>
+      <button onClick={addCountryCodeMapping}>Add Mapping</button>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Location</th><th>Country Code</th><th>Action</th></tr></thead>
+          <tbody>{countryCodeMappings.map(row => {
+            const isEditing = editingOriginUid === row.uid;
+            const anotherIsEditing = editingOriginUid !== null && !isEditing;
+            return <tr key={row.uid}>
+              <td><input value={row.location_name || ''} disabled={!isEditing} onChange={e => updateOriginLocal(row.uid, 'location_name', e.target.value)} placeholder="City or place name" /></td>
+              <td><input value={row.country_code || ''} disabled={!isEditing} onChange={e => updateOriginLocal(row.uid, 'country_code', e.target.value)} placeholder="GB" /></td>
+              <td>{isEditing
+                ? <div className="row"><button className="primary" onClick={() => saveCountryCodeMapping(row)}>Save</button><button onClick={cancelEditOrigin}>Cancel</button></div>
+                : <div className="row"><button disabled={anotherIsEditing} onClick={() => startEditOrigin(row)}>Edit</button><button disabled={anotherIsEditing} onClick={() => deleteCountryCodeMapping(row)}>Delete</button></div>}
+              </td>
+            </tr>;
+          })}</tbody>
         </table>
       </div>
     </>}
@@ -818,6 +998,16 @@ function AdminPanel() {
 
 function App() {
   const [loggedIn, setLoggedIn] = useState(Boolean(getToken()));
+
+  useEffect(() => {
+    function handleExpiredToken() {
+      setLoggedIn(false);
+    }
+
+    window.addEventListener('auth:expired', handleExpiredToken);
+    return () => window.removeEventListener('auth:expired', handleExpiredToken);
+  }, []);
+
   return loggedIn ? <MainPage onLogout={() => setLoggedIn(false)} /> : <Login onLogin={() => setLoggedIn(true)} />;
 }
 

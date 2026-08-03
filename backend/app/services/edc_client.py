@@ -8,9 +8,9 @@ REQUIRED_SHIPMENT_COLUMNS = [
     "ID", "BookingNumber", "Booking.BookingNumber", "Booking.Type", "BookingID", "Incoterm",
     "UniqueConsignRef", "DateCreated", "TransportMode", "ConsignorName",
     "ConsignorAddress.Country", "ConsignorAddress.CountryCode", "PickupName",
-    "PickupFromCountry", "PickupFromCountryCode", "OriginPort", "FirstLoad",
+    "PickupFromCountry", "PickupFromCountryCode", "Origin", "OriginPort", "FirstLoad",
     "ConsigneeName", "ConsigneeAddress.Country", "ConsigneeAddress.CountryCode",
-    "DeliveryName", "DeliveryToCountry", "DeliveryToCountryCode", "DestinationPort",
+    "DeliveryName", "DeliveryToCountry", "DeliveryToCountryCode", "Destination", "DestinationPort",
     "DischargePort", "LastDischarge"
 ]
 

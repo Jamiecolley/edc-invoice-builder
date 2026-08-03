@@ -19,6 +19,26 @@ class StartInvoiceRequest(BaseModel):
     to_date: date
 
 
+def serialize_final_lines(db: Session, lines):
+    org_codes = {line.org_code for line in lines}
+    organisations = db.query(Organisation).filter(Organisation.org_code.in_(org_codes)).all() if org_codes else []
+    charge_plans = {org.org_code: org.charge_plan_code or "DEFAULT_2026" for org in organisations}
+
+    return [{
+        "org_code": line.org_code,
+        "org_full_name": line.org_full_name,
+        "country_code": line.country_code,
+        "division": line.division,
+        "org_managed_by": line.org_managed_by,
+        "charge_plan_code": charge_plans.get(line.org_code, "DEFAULT_2026"),
+        "quantity": line.quantity,
+        "unit_price": float(line.unit_price),
+        "total_cost": float(line.total_cost),
+        "currency_code": line.currency_code,
+        "source": line.source
+    } for line in lines]
+
+
 @router.post("/start")
 async def start_invoice_process(payload: StartInvoiceRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
@@ -99,13 +119,13 @@ def exceptions(process_number: int, db: Session = Depends(get_db), current_user:
 @router.post("/{process_number}/create-final-invoice")
 def final_invoice(process_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     lines = create_final_invoice(db, process_number)
-    return [{"org_code": l.org_code, "org_full_name": l.org_full_name, "country_code": l.country_code, "org_managed_by": l.org_managed_by, "quantity": l.quantity, "total_cost": float(l.total_cost), "currency_code": l.currency_code, "source": l.source} for l in lines]
+    return serialize_final_lines(db, lines)
 
 
 @router.get("/{process_number}/final-lines")
 def final_lines(process_number: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     rows = db.query(FinalInvoiceLine).filter(FinalInvoiceLine.process_number == process_number).all()
-    return [{"org_code": r.org_code, "org_full_name": r.org_full_name, "country_code": r.country_code, "division": r.division, "org_managed_by": r.org_managed_by,  "quantity": r.quantity, "unit_price": float(r.unit_price), "total_cost": float(r.total_cost), "currency_code": r.currency_code, "source": r.source} for r in rows]
+    return serialize_final_lines(db, rows)
 
 
 @router.get("/{process_number}/download-excel")

@@ -26,6 +26,7 @@ class Organisation(Base):
     charge_plan_code = Column("ChargePlanCode", String(50), nullable=True, default="DEFAULT_2026")
     is_custom_invoicing = Column("isCustomInvoicing", Boolean, nullable=False, default=False)
     get_shipment_data = Column("GetShipmentData", Boolean, nullable=False, default=False)
+    shipment_country_basis = Column("ShipmentCountryBasis", String(20), nullable=True)
     finalised = Column("Finalised", Boolean, nullable=False, default=False)
     excluded = Column("Excluded", Boolean, nullable=False, default=False)
     created_at = Column("CreatedAt", DateTime, nullable=False, server_default=func.now())
@@ -190,8 +191,8 @@ class UNLOCODE(Base):
     unlocode = Column("UNLOCODE", String(20), unique=True, nullable=False)
 
 
-class LocationCountryMapping(Base):
-    __tablename__ = "tblLocationCountryMapping"
+class CountryCodeMapping(Base):
+    __tablename__ = "tblCountryCodeMapping"
     uid = Column("UID", Integer, primary_key=True)
     location_name = Column("LocationName", String(150), unique=True, nullable=False)
     country_code = Column("CountryCode", String(10), nullable=False)

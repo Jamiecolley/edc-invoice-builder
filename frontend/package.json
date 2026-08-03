@@ -1,7 +1,8 @@
 {
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
+    "build": "npm run check:admin-table && vite build",
+    "check:admin-table": "node scripts/check-admin-table.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

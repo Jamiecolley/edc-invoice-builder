@@ -145,7 +145,7 @@ INITIAL_ADMIN_PASSWORD
 7. For organisations where `GetShipmentData = true`, the backend calls `Shipments_Read` using `PageSize = 100`.
 8. The app stores warnings in `tblInvoiceException`.
 9. Review Usage, Shipment Data, and Warnings.
-10. Click `Create Final Invoice`.
+10. Click `Final Lines` to create and review the final invoice.
 11. Click `Download Excel`.
 
 ## Important invoice rules

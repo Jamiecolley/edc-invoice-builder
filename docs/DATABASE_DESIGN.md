@@ -12,7 +12,7 @@ Main tables:
 - `tblChargePlanRate`
 - `tblCountryResolutionRules`
 - `tblUNLOCODE`
-- `tblLocationCountryMapping`
+- `tblCountryCodeMapping`
 - `tblInvoiceException`
 - `tblFinalInvoiceLine`
 

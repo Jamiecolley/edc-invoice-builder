@@ -38,6 +38,11 @@ export async function apiFetch(path, options = {}) {
   }
 
   if (!response.ok) {
+    if (response.status === 401 && token && path !== '/auth/login') {
+      clearToken();
+      window.dispatchEvent(new Event('auth:expired'));
+    }
+
     let message = 'Request failed';
 
     if (data?.detail) {

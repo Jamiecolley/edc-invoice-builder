@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 from app.core.database import Base, SessionLocal, engine
 from app.models import user, invoice
 from app.services.bootstrap import bootstrap_defaults
@@ -21,6 +22,38 @@ app.add_middleware(
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
+    # create_all does not add columns to an existing database.
+    if "ShipmentCountryBasis" not in {c["name"] for c in inspect(engine).get_columns("tblOrganisations")}:
+        with engine.begin() as connection:
+            connection.execute(text(
+                'ALTER TABLE "tblOrganisations" ADD COLUMN "ShipmentCountryBasis" VARCHAR(20)'
+            ))
+            connection.execute(text(
+                '''UPDATE "tblOrganisations" SET "ShipmentCountryBasis" = 'ORIGIN' WHERE "GetShipmentData" = true'''
+            ))
+    # Preserve mappings created under either of the earlier, narrowly named tables.
+    existing_tables = set(inspect(engine).get_table_names())
+    with engine.begin() as connection:
+        if "tblLocationCountryMapping" in existing_tables:
+            connection.execute(text('''
+                INSERT INTO "tblCountryCodeMapping" ("LocationName", "CountryCode")
+                SELECT old."LocationName", old."CountryCode"
+                FROM "tblLocationCountryMapping" old
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM "tblCountryCodeMapping" current
+                    WHERE lower(current."LocationName") = lower(old."LocationName")
+                )
+            '''))
+        if "tblOriginCountryMapping" in existing_tables:
+            connection.execute(text('''
+                INSERT INTO "tblCountryCodeMapping" ("LocationName", "CountryCode")
+                SELECT old."Origin", old."CountryCode"
+                FROM "tblOriginCountryMapping" old
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM "tblCountryCodeMapping" current
+                    WHERE lower(current."LocationName") = lower(old."Origin")
+                )
+            '''))
     db = SessionLocal()
     try:
         bootstrap_defaults(db)
