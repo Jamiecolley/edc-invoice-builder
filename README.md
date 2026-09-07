@@ -88,6 +88,7 @@ nano .env
 Change these values:
 
 ```env
+DOMAIN=invoice.scm.centrino.app
 POSTGRES_PASSWORD=change_me
 DATABASE_URL=postgresql+psycopg2://edcuser:change_me@postgres:5432/edc_invoice
 JWT_SECRET_KEY=make_this_long_and_random
@@ -116,14 +117,18 @@ docker compose up -d --build
 In your browser:
 
 ```text
-http://YOUR-SERVER-IP:3000
+https://invoice.scm.centrino.app
 ```
 
 Backend health check:
 
 ```text
-http://YOUR-SERVER-IP:8000/health
+https://invoice.scm.centrino.app/api/health
 ```
+
+The domain must point to the server and inbound ports 80 and 443 must be open.
+Caddy automatically obtains, renews, and serves the SSL certificate. See
+`docs/DEPLOYMENT.md` for details.
 
 ## Login
 
