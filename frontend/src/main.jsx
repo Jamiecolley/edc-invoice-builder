@@ -626,7 +626,7 @@ function AdminPanel() {
               <th><span>Division</span></th>
               <th><span>Org Managed By</span></th>
               <th><span>Get Shipment Data</span></th>
-              <th><span>Billing Country</span></th>
+              <th><span>Billing Direction</span></th>
               <th><span>Country Multi</span></th>
               <th><span>Freight Manager</span></th>
               <th><span>Excluded</span></th>

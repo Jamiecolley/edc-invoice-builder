@@ -270,6 +270,12 @@ th { background: #f7f2eb; position: sticky; top: 0; }
   text-align: center;
 }
 
+.org-table th:nth-child(10),
+.org-table td:nth-child(10) {
+  width: 100px;
+  text-align: center;
+}
+
 .org-table td:nth-child(7) select,
 .org-table td:nth-child(11) select {
   width: 100%;
